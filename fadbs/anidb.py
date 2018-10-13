@@ -1,8 +1,9 @@
 from __future__ import unicode_literals, division, absolute_import
+
+from datetime import datetime
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from past.builtins import basestring
 
-import xml
 import logging
 
 from bs4 import Tag
@@ -12,6 +13,9 @@ from flexget.utils.requests import Session, TimedLimiter
 from flexget.plugin import get_plugin_by_name, PluginError
 
 PLUGIN_ID = 'fadbs.util.anidb'
+
+CLIENT_STR = 'fadbs'
+CLIENT_VER = 1
 
 log = logging.getLogger(PLUGIN_ID)
 
@@ -29,7 +33,7 @@ class AnidbSearch(object):
     def __init__(self):
         self.debug = False
 
-    def by_id(self, aid):
+    def by_name(self, aid):
         pass
 
 
@@ -37,52 +41,64 @@ class AnidbParser(object):
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime&aid=%s'
 
+    DATE_FORMAT = '%Y-%m-%d'
+
     def __init__(self):
-        # todo: structure genres better
-        # todo: episodes
-        # todo: actors
-        # todo: staff
-        self.genres = []  # tags
-        # tag attrs: id, parent_id (if child), weight, localspoiler, globalspoiler, verified
-        # name
-        self.names = []  # titles > title
-        # xml:lang -- the langauge code
-        # type -- main -- main title used on AniDB
-        # ------- short -- short title for the given language
-        # ------- synonym -- ?
-        # ------- official -- official translated title
-        self.anidb_id = None  # anime attr id
-        # [episode_num, length_in_min, airdate_yyyy-mm-dd, titles={en:,ja:,x-jat:}]
-        self.episodes = []  # episodes
-        self.date = []  # start, end
-        self.permanent_rating = None  # ratings > permanent
-        self.mean_rating = None  # ratings > temporary
+        self.anidb_id = None  # anime.attr.id
+        self.type = None  # type
+        self.num_episodes = None  # episodecount
+        self.start_date = None  # startdate
+        self.end_date = None  # enddate
+        self.titles = []  # titles > title
+        self.related_anime = []  # relatedanime
+        self.similar_anime = []  # similaranime
+        self.official_url = None  # url
+        self.creators = []  # creators
         self.description = None  # description
+        self.ratings = None
+        self.genres = []  # tags
+        self.characters = []  # characters
+        self.episodes = []  # episodes
 
     def __str__(self):
         return '<AnidbParser (name=%s, anidb_id=%s)>' % ('WIP', self.anidb_id)
 
-    def parse_titles(self, titles_contents):
-        titles = []
+    def __parse_titles(self, titles_contents):
         for title in titles_contents:
-            title_obj = {
+            self.titles.append({
                 'title': title.string,
                 'lang': title['xml:lang'],
                 'type': title['type']
-            }
-            titles.append(title_obj)
-        return titles
+            })
 
-    def in_genre_children(self, tag_obj, parent_tag_id):
-        for child in tag_obj['children']:
-            if parent_tag_id == child['id']:
-                return [tag_obj['id']]
+    def __parse_related(self, related_contents):
+        for related in related_contents:
+            self.related_anime.append({
+                'id': related['id'],
+                'type': related['type'],
+                'name': related.string
+            })
 
-    def parse_genres(self, tags_contents):
-        # tag attrs: id, parent_id (if child), weight, localspoiler, globalspoiler, verified
-        tags = []
+    def __parse_similar(self, similar_contents):
+        for similar in similar_contents:
+            self.similar_anime.append({
+                'id': similar['id'],
+                'approval': similar['approval'],
+                'total': similar['total'],
+                'name': similar.string
+            })
+
+    def __parse_creators(self, creator_contents):
+        for creator in creator_contents:
+            self.creators.append({
+                'id': creator['id'],
+                'type': creator['type'],
+                'name': creator.string
+            })
+
+    def __parse_genres(self, tags_contents):
         for tag in tags_contents:
-            tags.append({
+            self.genres.append({
                 'id': tag['id'],
                 'parentid': tag['parentid'] if 'parentid' in tag.attrs else None,
                 'name': tag.find('name').string,
@@ -91,24 +107,71 @@ class AnidbParser(object):
                 'globalspoiler': bool(tag['globalspoiler']),
                 'verified': bool(tag['verified'])
             })
-        return tags
+
+    def __parse_characters(self, characters_contents):
+        for character in characters_contents:
+            self.characters.append({
+                'id': character['id'],
+                'type': character['type'],
+                'rating': character.contents.rating.string,
+                'gender': character.contents.gender.string,
+                'character_type': {
+                    'id': character.contents.charactertype['id'],
+                    'name': character.contents.charactertype.string
+                },
+                'description': character.contents.description.string,
+                'seiyuu': {
+                    'id': character.contents.seiyuu['id'],
+                    'name': character.contents.seiyuu.string
+                }
+            })
+
+    def __parse_episodes(self, episodes_contents):
+        for episode in episodes_contents:
+            titles = []
+            for title in episode.find('title'):
+                titles.append({
+                    'title': title.string,
+                    'lang': title['xml:lang']
+                })
+            self.episodes.append({
+                'id': episode['id'],
+                'episode_number': episode.contents.number.string,
+                'episode_type': episode.contents.number['type'],
+                'length': episode.contents.length.string,
+                'airdate': datetime.strptime(episode.contents.airdate, self.DATE_FORMAT),
+                'rating': episode.contents.rating.string,
+                'votes': episode.contents.rating['votes'],
+                'titles': titles
+            })
 
     def parse(self, anidb_id, soup=None):
         self.anidb_id = anidb_id
         url = self.anidb_xml_url % self.anidb_id
 
         if not soup:
-            page = requests.get(url)
+            page = requests.get(url, params={'client': CLIENT_STR, 'clientver': CLIENT_VER, 'protover': 1})
+            print(page.url)
             soup = get_soup(page.text)
 
+        print(soup)
         root = soup.find('anime')
 
-        self.names = self.parse_titles(root.find('titles'))
-        self.genres = self.parse_genres(root.find('tags'))
+        self.type = root.find('type').string
+        self.num_episodes = root.find('episodecount').string
+        self.start_date = datetime.strptime(root.find('startdate').string, self.DATE_FORMAT)
+        self.end_date = datetime.strptime(root.find('enddate').string, self.DATE_FORMAT)
+        self.__parse_titles(root.find('titles'))
+        self.__parse_related(root.find('relatedanime'))
+        self.__parse_similar(root.find('similaranime'))
+        self.official_url = root.find('url').string
+        self.__parse_creators(root.find('creators'))
         self.description = root.find('description').string
-        self.date = [
-            root.find('startdate').string,
-            root.find('enddate').string
-        ]
-        self.permanent_rating = root.find('ratings').find('permanent').string
-        self.mean_rating = root.find('raatings').find('temporary').string
+        ratings_tag = root.find('ratings')
+        self.ratings = {
+            'permanent': ratings_tag.find('permanent').string,
+            'mean': ratings_tag.find('temporary').string
+        }
+        self.__parse_genres(root.find('tags'))
+        self.__parse_characters(root.find('characters'))
+        self.__parse_episodes(root.find('episodes'))
