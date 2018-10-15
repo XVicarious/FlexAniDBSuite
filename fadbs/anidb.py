@@ -31,11 +31,12 @@ class AnidbSearch(object):
     def __init__(self):
         self.debug = False
 
-    def by_name(self, aid):
+    def by_name(self, anime_name):
         pass
 
 
 class AnidbParser(object):
+    """ Fetch and parse an AniDB API entry """
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime&aid=%s'
 
@@ -45,8 +46,7 @@ class AnidbParser(object):
         self.anidb_id = None  # anime.attr.id
         self.type = None  # type
         self.num_episodes = None  # episodecount
-        self.start_date = None  # startdate
-        self.end_date = None  # enddate
+        self.dates = None  # startdate, enddate
         self.titles = []  # titles > title
         self.related_anime = []  # relatedanime
         self.similar_anime = []  # similaranime
@@ -166,23 +166,32 @@ class AnidbParser(object):
             print(page.url)
             soup = get_soup(page.text)
 
-        print(soup)
         root = soup.find('anime')
 
         self.type = root.find('type').string
         self.num_episodes = root.find('episodecount').string
-        self.start_date = datetime.strptime(root.find('startdate').string, self.DATE_FORMAT).date()
-        self.end_date = datetime.strptime(root.find('enddate').string, self.DATE_FORMAT).date()
+
+        start_tag = root.find('startdate')
+        end_tag = root.find('enddate')
+        self.dates = {
+            'start': None if start_tag is None else datetime.strptime(start_tag.string, self.DATE_FORMAT).date(),
+            'end': None if end_tag is None else datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
+        }
+
         self.__parse_titles(root.find('titles'))
+
         related_tag = root.find('relatedanime')
         if related_tag is not None:
             self.__parse_related(related_tag)
+
         similar_tag = root.find('similaranime')
         if similar_tag is not None:
             self.__parse_similar(similar_tag)
+
         self.official_url = root.find('url').string
         self.__parse_creators(root.find('creators'))
         self.description = root.find('description').string
+
         ratings_tag = root.find('ratings')
         permanent_tag = ratings_tag.find('permanent')
         mean_tag = ratings_tag.find('temporary')
