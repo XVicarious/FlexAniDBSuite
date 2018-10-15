@@ -1,0 +1,2 @@
+# FlexAniDBSuite
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/67858bc2151c42b1a69fa7ac27e2f5d4)](https://app.codacy.com/app/XVSS/FlexAniDBSuite?utm_source=github.com&utm_medium=referral&utm_content=XVicarious/FlexAniDBSuite&utm_campaign=Badge_Grade_Dashboard)
