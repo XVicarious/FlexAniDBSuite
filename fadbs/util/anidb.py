@@ -26,13 +26,18 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '2 seconds'))
 class AnidbSearch(object):
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime'
-    prelook_url = 'http://anisearch.outrance.pl?task=search&query=%s'
+    prelook_url = 'http://anisearch.outrance.pl?task=search'
 
     def __init__(self):
         self.debug = False
 
-    def by_name(self, anime_name):
-        pass
+    def by_name_exact(self, anime_name):
+        search_url = self.prelook_url + '&query="%s"' % anime_name
+        req = requests.get(search_url)
+        if req.status_code != 200:
+            raise Exception
+        soup = get_soup(req.text)
+        return soup.find('anime')['aid']
 
 
 class AnidbParser(object):
