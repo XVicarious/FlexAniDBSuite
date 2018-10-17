@@ -68,7 +68,7 @@ class AnidbParser(object):
 
     def __parse_titles(self, titles_contents):
         for title in titles_contents:
-            if type(title) is Tag:
+            if isinstance(title, Tag):
                 self.titles.append({
                     'title': title.string,
                     'lang': title['xml:lang'],
@@ -77,7 +77,7 @@ class AnidbParser(object):
 
     def __parse_related(self, related_contents):
         for related in related_contents:
-            if type(related) is Tag:
+            if isinstance(related, Tag):
                 self.related_anime.append({
                     'id': related['id'],
                     'type': related['type'],
@@ -86,7 +86,7 @@ class AnidbParser(object):
 
     def __parse_similar(self, similar_contents):
         for similar in similar_contents:
-            if type(similar) is Tag:
+            if isinstance(similar, Tag):
                 self.similar_anime.append({
                     'id': similar['id'],
                     'approval': similar['approval'],
@@ -96,7 +96,7 @@ class AnidbParser(object):
 
     def __parse_creators(self, creator_contents):
         for creator in creator_contents:
-            if type(creator) is Tag:
+            if isinstance(creator, Tag):
                 self.creators.append({
                     'id': creator['id'],
                     'type': creator['type'],
@@ -105,7 +105,7 @@ class AnidbParser(object):
 
     def __parse_genres(self, tags_contents):
         for tag in tags_contents:
-            if type(tag) is Tag:
+            if isinstance(tag, Tag):
                 self.genres.append({
                     'id': tag['id'],
                     'parentid': tag['parentid'] if 'parentid' in tag.attrs else None,
@@ -118,7 +118,7 @@ class AnidbParser(object):
 
     def __parse_characters(self, characters_contents):
         for character in characters_contents:
-            if type(character) is Tag:
+            if isinstance(character, Tag):
                 character_type = character.find('charactertype')
                 seiyuu = character.find('seiyuu')
                 rating = character.find('rating')
@@ -141,10 +141,10 @@ class AnidbParser(object):
 
     def __parse_episodes(self, episodes_contents):
         for episode in episodes_contents:
-            if type(episode) is Tag:
+            if isinstance(episode, Tag):
                 titles = []
                 for title in episode.find('title'):
-                    if type(title) is Tag:
+                    if isinstance(title, Tag):
                         titles.append({
                             'title': title.string,
                             'lang': title['xml:lang']
