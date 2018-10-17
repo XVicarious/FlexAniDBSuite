@@ -66,101 +66,93 @@ class AnidbParser(object):
     def __str__(self):
         return '<AnidbParser (name=%s, anidb_id=%s)>' % ('WIP', self.anidb_id)
 
-    def __parse_titles(self, titles_contents):
-        for title in titles_contents:
+    def __append_title(self, title):
+        self.titles.append({
+            'title': title.string,
+            'lang': title['xml:lang'],
+            'type': title['type']
+        })
+
+    def __append_related(self, related):
+        self.related_anime.append({
+            'id': related['id'],
+            'type': related['type'],
+            'name': related.string
+        })
+
+    def __append_similar(self, similar):
+        self.similar_anime.append({
+            'id': similar['id'],
+            'approval': similar['approval'],
+            'total': similar['total'],
+            'name': similar.string
+        })
+
+    def __append_creator(self, creator):
+        self.creators.append({
+            'id': creator['id'],
+            'type': creator['type'],
+            'name': creator.string
+        })
+
+    def __append_genre(self, tag):
+        self.genres.append({
+            'id': tag['id'],
+            'parentid': tag['parentid'] if 'parentid' in tag.attrs else None,
+            'name': tag.find('name').string,
+            'weight': tag['weight'],
+            'localspoiler': bool(tag['localspoiler']),
+            'globalspoiler': bool(tag['globalspoiler']),
+            'verified': bool(tag['verified'])
+        })
+
+    def __append_character(self, character):
+        character_type = character.find('charactertype')
+        seiyuu = character.find('seiyuu')
+        rating = character.find('rating')
+        description = character.find('description')
+        self.characters.append({
+            'id': character['id'],
+            'type': character['type'],
+            'rating': None if rating is None else rating.string,
+            'gender': character.find('gender').string,
+            'character_type': {
+                'id': character_type['id'],
+                'name': character_type.string
+            },
+            'description': None if description is None else description.string,
+            'seiyuu': {
+                'id': None if seiyuu is None else seiyuu['id'],
+                'name': None if seiyuu is None else seiyuu.string
+            }
+        })
+
+    def __append_episode(self, episode):
+        titles = []
+        for title in episode.find('title'):
             if isinstance(title, Tag):
-                self.titles.append({
+                titles.append({
                     'title': title.string,
-                    'lang': title['xml:lang'],
-                    'type': title['type']
+                    'lang': title['xml:lang']
                 })
+        ep_number = episode.find('epno')
+        rating = episode.find('rating')
+        self.episodes.append({
+            'id': episode['id'],
+            'episode_number': ep_number.string,
+            'episode_type': ep_number['type'],
+            'length': episode.find('length').string,
+            'airdate': datetime.strptime(episode.find('airdate').string, self.DATE_FORMAT).date(),
+            'rating': rating.string,
+            'votes': rating['votes'],
+            'titles': titles
+        })
 
-    def __parse_related(self, related_contents):
-        for related in related_contents:
-            if isinstance(related, Tag):
-                self.related_anime.append({
-                    'id': related['id'],
-                    'type': related['type'],
-                    'name': related.string
-                })
-
-    def __parse_similar(self, similar_contents):
-        for similar in similar_contents:
-            if isinstance(similar, Tag):
-                self.similar_anime.append({
-                    'id': similar['id'],
-                    'approval': similar['approval'],
-                    'total': similar['total'],
-                    'name': similar.string
-                })
-
-    def __parse_creators(self, creator_contents):
-        for creator in creator_contents:
-            if isinstance(creator, Tag):
-                self.creators.append({
-                    'id': creator['id'],
-                    'type': creator['type'],
-                    'name': creator.string
-                })
-
-    def __parse_genres(self, tags_contents):
-        for tag in tags_contents:
-            if isinstance(tag, Tag):
-                self.genres.append({
-                    'id': tag['id'],
-                    'parentid': tag['parentid'] if 'parentid' in tag.attrs else None,
-                    'name': tag.find('name').string,
-                    'weight': tag['weight'],
-                    'localspoiler': bool(tag['localspoiler']),
-                    'globalspoiler': bool(tag['globalspoiler']),
-                    'verified': bool(tag['verified'])
-                })
-
-    def __parse_characters(self, characters_contents):
-        for character in characters_contents:
-            if isinstance(character, Tag):
-                character_type = character.find('charactertype')
-                seiyuu = character.find('seiyuu')
-                rating = character.find('rating')
-                description = character.find('description')
-                self.characters.append({
-                    'id': character['id'],
-                    'type': character['type'],
-                    'rating': None if rating is None else rating.string,
-                    'gender': character.find('gender').string,
-                    'character_type': {
-                        'id': character_type['id'],
-                        'name': character_type.string
-                    },
-                    'description': None if description is None else description.string,
-                    'seiyuu': {
-                        'id': None if seiyuu is None else seiyuu['id'],
-                        'name': None if seiyuu is None else seiyuu.string
-                    }
-                })
-
-    def __parse_episodes(self, episodes_contents):
-        for episode in episodes_contents:
-            if isinstance(episode, Tag):
-                titles = []
-                for title in episode.find('title'):
-                    if isinstance(title, Tag):
-                        titles.append({
-                            'title': title.string,
-                            'lang': title['xml:lang']
-                        })
-                ep_number = episode.find('epno')
-                rating = episode.find('rating')
-                self.episodes.append({
-                    'id': episode['id'],
-                    'episode_number': ep_number.string,
-                    'episode_type': ep_number['type'],
-                    'length': episode.find('length').string,
-                    'airdate': datetime.strptime(episode.find('airdate').string, self.DATE_FORMAT).date(),
-                    'rating': rating.string,
-                    'votes': rating['votes'],
-                    'titles': titles
-                })
+    @staticmethod
+    def __parse_tiered_tag(contents, callback):
+        for item in contents:
+            if isinstance(item, Tag):
+                callback(item)
 
     def parse(self, anidb_id, soup=None):
         self.anidb_id = anidb_id
@@ -183,18 +175,18 @@ class AnidbParser(object):
             'end': None if end_tag is None else datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
         }
 
-        self.__parse_titles(root.find('titles'))
+        self.__parse_tiered_tag(root.find('titles'), self.__append_title)
 
         related_tag = root.find('relatedanime')
         if related_tag is not None:
-            self.__parse_related(related_tag)
+            self.__parse_tiered_tag(related_tag, self.__append_related)
 
         similar_tag = root.find('similaranime')
         if similar_tag is not None:
-            self.__parse_similar(similar_tag)
+            self.__parse_tiered_tag(similar_tag, self.__append_similar)
 
         self.official_url = root.find('url').string
-        self.__parse_creators(root.find('creators'))
+        self.__parse_tiered_tag(root.find('creators'), self.__append_creator)
         self.description = root.find('description').string
 
         ratings_tag = root.find('ratings')
@@ -210,6 +202,6 @@ class AnidbParser(object):
                 'votes': mean_tag['votes']
             }
         }
-        self.__parse_genres(root.find('tags'))
-        self.__parse_characters(root.find('characters'))
-        self.__parse_episodes(root.find('episodes'))
+        self.__parse_tiered_tag(root.find('tags'), self.__append_genre)
+        self.__parse_tiered_tag(root.find('characters'), self.__append_character)
+        self.__parse_tiered_tag(root.find('episodes'), self.__append_episode)
