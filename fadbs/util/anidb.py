@@ -47,6 +47,8 @@ class AnidbParser(object):
 
     DATE_FORMAT = '%Y-%m-%d'
 
+    RESOURCE_MIN_CACHE = 24 * 60 * 60
+
     def __init__(self):
         self.anidb_id = None  # anime.attr.id
         self.type = None  # type
@@ -68,21 +70,21 @@ class AnidbParser(object):
 
     def __append_title(self, title):
         self.titles.append({
-            'title': title.string,
+            'name': title.string,
             'lang': title['xml:lang'],
             'type': title['type']
         })
 
     def __append_related(self, related):
         self.related_anime.append({
-            'id': related['id'],
+            'id': int(related['id']),
             'type': related['type'],
             'name': related.string
         })
 
     def __append_similar(self, similar):
         self.similar_anime.append({
-            'id': similar['id'],
+            'id': int(similar['id']),
             'approval': similar['approval'],
             'total': similar['total'],
             'name': similar.string
@@ -90,17 +92,17 @@ class AnidbParser(object):
 
     def __append_creator(self, creator):
         self.creators.append({
-            'id': creator['id'],
+            'id': int(creator['id']),
             'type': creator['type'],
             'name': creator.string
         })
 
     def __append_genre(self, tag):
         self.genres.append({
-            'id': tag['id'],
-            'parentid': tag['parentid'] if 'parentid' in tag.attrs else None,
+            'id': int(tag['id']),
+            'parentid': int(tag['parentid']) if 'parentid' in tag.attrs else 0,
             'name': tag.find('name').string,
-            'weight': tag['weight'],
+            'weight': int(tag['weight']),
             'localspoiler': bool(tag['localspoiler']),
             'globalspoiler': bool(tag['globalspoiler']),
             'verified': bool(tag['verified'])
@@ -112,7 +114,7 @@ class AnidbParser(object):
         rating = character.find('rating')
         description = character.find('description')
         self.characters.append({
-            'id': character['id'],
+            'id': int(character['id']),
             'type': character['type'],
             'rating': None if rating is None else rating.string,
             'gender': character.find('gender').string,
@@ -128,23 +130,24 @@ class AnidbParser(object):
         })
 
     def __append_episode(self, episode):
+        ep_number = episode.find('epno')
         titles = []
-        for title in episode.find('title'):
+        for title in episode.find_all('title'):
             if isinstance(title, Tag):
                 titles.append({
-                    'title': title.string,
+                    'name': title.string,
                     'lang': title['xml:lang']
                 })
-        ep_number = episode.find('epno')
         rating = episode.find('rating')
+        ep_airdate = episode.find('airdate')
         self.episodes.append({
-            'id': episode['id'],
+            'id': int(episode['id']),
             'episode_number': ep_number.string,
             'episode_type': ep_number['type'],
             'length': episode.find('length').string,
-            'airdate': datetime.strptime(episode.find('airdate').string, self.DATE_FORMAT).date(),
-            'rating': rating.string,
-            'votes': rating['votes'],
+            'airdate': None if ep_airdate is None else datetime.strptime(ep_airdate.string, self.DATE_FORMAT).date(),
+            'rating': None if rating is None else rating.string,
+            'votes': None if rating is None else rating['votes'],
             'titles': titles
         })
 
@@ -195,11 +198,11 @@ class AnidbParser(object):
         self.ratings = {
             'permanent': {
                 'rating': permanent_tag.string,
-                'votes': permanent_tag['votes']
+                'votes': permanent_tag['count']
             },
             'mean': {
                 'rating': mean_tag.string,
-                'votes': mean_tag['votes']
+                'votes': mean_tag['count']
             }
         }
         self.__parse_tiered_tag(root.find('tags'), self.__append_genre)
