@@ -22,6 +22,7 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '2 seconds'))
 
 
 class AnidbSearch(object):
+    """ Search for an anime's id """
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime'
     prelook_url = 'http://anisearch.outrance.pl?task=search'
@@ -30,6 +31,12 @@ class AnidbSearch(object):
         self.debug = False
 
     def by_name_exact(self, anime_name):
+        """
+        Search for an anime by exact name, not terribly friendly right now
+
+        :param anime_name: name of the anime
+        :return: an anidb id, hopefully
+        """
         search_url = self.prelook_url + '&query="%s"' % anime_name
         req = requests.get(search_url)
         if req.status_code != 200:
@@ -127,15 +134,18 @@ class AnidbParser(object):
             }
         })
 
-    def __append_episode(self, episode):
-        ep_number = episode.find('epno')
+    def __find_episode_titles(self, ep_titles_contents):
         titles = []
-        for title in episode.find_all('title'):
+        for title in ep_titles_contents:
             if isinstance(title, Tag):
                 titles.append({
                     'name': title.string,
                     'lang': title['xml:lang']
                 })
+        return titles
+
+    def __append_episode(self, episode):
+        ep_number = episode.find('epno')
         rating = episode.find('rating')
         ep_airdate = episode.find('airdate')
         self.episodes.append({
@@ -146,14 +156,13 @@ class AnidbParser(object):
             'airdate': None if ep_airdate is None else datetime.strptime(ep_airdate.string, self.DATE_FORMAT).date(),
             'rating': None if rating is None else rating.string,
             'votes': None if rating is None else rating['votes'],
-            'titles': titles
+            'titles': self.__find_episode_titles(episode.find_all('title'))
         })
 
     @staticmethod
     def __parse_tiered_tag(contents, callback):
-        for item in contents:
-            if isinstance(item, Tag):
-                callback(item)
+        for item in contents.find_all(True, recursive=False):
+            callback(item)
 
     def parse(self, soup=None):
         url = self.anidb_xml_url % self.anidb_id
@@ -190,18 +199,28 @@ class AnidbParser(object):
         self.description = root.find('description').string
 
         ratings_tag = root.find('ratings')
-        permanent_tag = ratings_tag.find('permanent')
-        mean_tag = ratings_tag.find('temporary')
-        self.ratings = {
-            'permanent': {
-                'rating': permanent_tag.string,
-                'votes': permanent_tag['count']
-            },
-            'mean': {
-                'rating': mean_tag.string,
-                'votes': mean_tag['count']
+        if ratings_tag is not None:
+            permanent_tag = ratings_tag.find('permanent')
+            mean_tag = ratings_tag.find('temporary')
+            self.ratings = {
+                'permanent': {
+                    'rating': permanent_tag.string,
+                    'votes': permanent_tag['count']
+                },
+                'mean': {
+                    'rating': mean_tag.string,
+                    'votes': mean_tag['count']
+                }
             }
-        }
-        self.__parse_tiered_tag(root.find('tags'), self.__append_genre)
-        self.__parse_tiered_tag(root.find('characters'), self.__append_character)
-        self.__parse_tiered_tag(root.find('episodes'), self.__append_episode)
+
+        tag_root = root.find('tags')
+        if tag_root is not None:
+            self.__parse_tiered_tag(root.find('tags'), self.__append_genre)
+
+        character_root = root.find('characters')
+        if character_root is not None:
+            self.__parse_tiered_tag(root.find('characters'), self.__append_character)
+
+        episodes_root = root.find('episodes')
+        if episodes_root is not None:
+            self.__parse_tiered_tag(root.find('episodes'), self.__append_episode)
