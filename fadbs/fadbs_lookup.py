@@ -180,7 +180,8 @@ class AnimeEpisodeTitle(Base):
     title = Column(Unicode)
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
 
-    def __init__(self, title, langauge):
+    def __init__(self, parent_id, title, langauge):
+        self.parent_id = parent_id
         self.title = title
         self.language = langauge
 
@@ -279,6 +280,7 @@ class FadbsLookup(object):
     @staticmethod
     def __parse_new_series(anidb_id, session):
         parser = AnidbParser(anidb_id)
+        parser.parse()
         series = Anime()
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes
@@ -302,16 +304,16 @@ class FadbsLookup(object):
                                        item['length'], item['airdate'], item['rating'], item['votes'])
                 log.debug("aid:%s, episode: %s", anidb_id, item)
                 for item_title in item['titles']:
-                    lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang'])
+                    lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
                     if not lang:
                         lang = AnimeLangauge(item_title['lang'])
-                    episode.titles.append(AnimeEpisodeTitle(item_title['name'], lang))
+                    episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
             series.episodes.append(episode)
         for item in parser.titles:
-            lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang'])
+            lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
             if not lang:
                 lang = AnimeLangauge(item['lang'])
-            series.titles.append(AnimeTitle(item['name'], lang, item['type']))
+            series.titles.append(AnimeTitle(item['name'], lang.name, item['type']))
         series.updated = datetime.utcnow()
         session.add(series)
         return series
