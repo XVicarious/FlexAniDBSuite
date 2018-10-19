@@ -1,21 +1,19 @@
 from __future__ import unicode_literals, division, absolute_import
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 
 import logging
+from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-
-from sqlalchemy import Table, Column, Integer, Float, String, Unicode, Boolean, DateTime, Text, Date
-from sqlalchemy.schema import ForeignKey, Index
-from sqlalchemy.orm import relation
 
 from flexget import db_schema, plugin
 from flexget.db_schema import UpgradeImpossible
 from flexget.event import event
-from flexget.entry import Entry
-from flexget.utils.log import log_once
 from flexget.utils.database import with_session
+from flexget.utils.log import log_once
+from sqlalchemy import Table, Column, Integer, Float, String, Unicode, Boolean, DateTime, Text, Date
+from sqlalchemy.orm import relation
+from sqlalchemy.schema import ForeignKey, Index
 
-from fadbs.util import AnidbParser, AnidbSearch
+from .util import AnidbParser, AnidbSearch
 
 SCHEMA_VER = 1
 
@@ -280,8 +278,7 @@ class FadbsLookup(object):
 
     @staticmethod
     def __parse_new_series(anidb_id, session):
-        parser = AnidbParser()
-        parser.parse(anidb_id)
+        parser = AnidbParser(anidb_id)
         series = Anime()
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes

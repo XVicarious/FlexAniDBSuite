@@ -1,14 +1,12 @@
 from __future__ import unicode_literals, division, absolute_import
 
-from datetime import datetime
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
-
 import logging
+from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
+from datetime import datetime
 
 from bs4 import Tag
-
-from flexget.utils.soup import get_soup
 from flexget.utils.requests import Session, TimedLimiter
+from flexget.utils.soup import get_soup
 
 PLUGIN_ID = 'fadbs.util.anidb'
 
@@ -49,8 +47,8 @@ class AnidbParser(object):
 
     RESOURCE_MIN_CACHE = 24 * 60 * 60
 
-    def __init__(self):
-        self.anidb_id = None  # anime.attr.id
+    def __init__(self, anidb_id):
+        self.anidb_id = anidb_id
         self.type = None  # type
         self.num_episodes = None  # episodecount
         self.dates = None  # startdate, enddate
@@ -157,8 +155,7 @@ class AnidbParser(object):
             if isinstance(item, Tag):
                 callback(item)
 
-    def parse(self, anidb_id, soup=None):
-        self.anidb_id = anidb_id
+    def parse(self, soup=None):
         url = self.anidb_xml_url % self.anidb_id
 
         if not soup:

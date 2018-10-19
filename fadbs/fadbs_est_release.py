@@ -1,12 +1,10 @@
 from __future__ import unicode_literals, division, absolute_import
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 
 import logging
+from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 
 from flexget import plugin
 from flexget.event import event
-from flexget.utils.tools import split_title_year
-
 
 PLUGIN_ID = 'fadbs_est_release'
 
