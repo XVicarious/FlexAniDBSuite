@@ -134,7 +134,8 @@ class AnidbParser(object):
             }
         })
 
-    def __find_episode_titles(self, ep_titles_contents):
+    @staticmethod
+    def __find_episode_titles(ep_titles_contents):
         titles = []
         for title in ep_titles_contents:
             if isinstance(title, Tag):

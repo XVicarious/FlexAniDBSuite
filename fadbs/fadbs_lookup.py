@@ -69,6 +69,8 @@ class Anime(Base):
     genres = relation('AnimeGenre', secondary=genres_table, backref='series')
     #characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
     episodes = relation('AnimeEpisode', secondary=episodes_table, backref='series')
+    year = Column(Integer)
+    season = Column(String)
 
     updated = Column(DateTime)
 
@@ -100,13 +102,14 @@ class AnimeGenre(Base):
     global_spoiler = Column(Boolean)
     verified = Column(Boolean)
 
-    def __init__(self, anidb_id, name, weight, local_spoiler, global_spoiler, verified):
+    def __init__(self, anidb_id, name, weight, spoiler, verified, parent=None):
         self.anidb_id = anidb_id
         self.name = name
         self.weight = weight
-        self.local_spoiler = local_spoiler
-        self.global_spoiler = global_spoiler
+        self.local_spoiler = spoiler['local']
+        self.global_spoiler = spoiler['global']
         self.verified = verified
+        self.parent_id = parent
 
 
 class AnimeCreator(Base):
@@ -132,10 +135,11 @@ class AnimeTitle(Base):
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
     ep_type = Column(Unicode)
 
-    def __init__(self, name, language, ep_type):
+    def __init__(self, name, language, ep_type, parent):
         self.name = name
         self.language = language
         self.ep_type = ep_type
+        self.parent_id = parent
 
 
 class AnimeLangauge(Base):
@@ -162,7 +166,7 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id, number, ep_type, length, airdate, rating, votes):
+    def __init__(self, anidb_id, number, ep_type, length, airdate, rating, votes, parent):
         self.anidb_id = anidb_id
         self.number = number
         self.ep_type = ep_type
@@ -170,6 +174,7 @@ class AnimeEpisode(Base):
         self.airdate = airdate
         self.rating = rating
         self.votes = votes
+        self.parent_id = parent
 
 
 class AnimeEpisodeTitle(Base):
@@ -294,14 +299,18 @@ class FadbsLookup(object):
         for item in genres_list:
             genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['id']).first()
             if not genre:
-                genre = AnimeGenre(item['id'], item['name'], item['weight'],
-                                   item['localspoiler'], item['globalspoiler'], item['verified'])
+                spoiler = {
+                    'local': item['localspoiler'],
+                    'global': item['globalspoiler']
+                }
+                parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
+                genre = AnimeGenre(item['id'], item['name'], item['weight'], spoiler, item['verified'], parent_genre)
             series.genres.append(genre)
         for item in parser.episodes:
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
-                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'],
-                                       item['length'], item['airdate'], item['rating'], item['votes'])
+                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'], item['length'],
+                                       item['airdate'], item['rating'], item['votes'], series.id)
                 log.debug("aid:%s, episode: %s", anidb_id, item)
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
@@ -313,7 +322,7 @@ class FadbsLookup(object):
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
             if not lang:
                 lang = AnimeLangauge(item['lang'])
-            series.titles.append(AnimeTitle(item['name'], lang.name, item['type']))
+            series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id))
         series.updated = datetime.utcnow()
         session.add(series)
         return series
