@@ -175,8 +175,15 @@ class AnidbParser(object):
 
         root = soup.find('anime')
 
-        self.type = root.find('type').string
-        self.num_episodes = root.find('episodecount').string
+        try:
+            self.type = root.find('type').string
+        except AttributeError:
+            self.type = None
+
+        try:
+            self.num_episodes = int(root.find('episodecount').string)
+        except AttributeError:
+            self.num_episodes = 0
 
         start_tag = root.find('startdate')
         end_tag = root.find('enddate')
