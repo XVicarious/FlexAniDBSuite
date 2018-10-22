@@ -9,21 +9,15 @@ from flexget.db_schema import UpgradeImpossible
 from flexget.event import event
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
-from sqlalchemy import Table, Column, Integer, Float, String, Unicode, Boolean, DateTime, Text, Date
-from sqlalchemy.orm import relation
+from sqlalchemy import Table, Column, Integer, Float, String, Unicode, DateTime, Text, Date
+from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
 from .util import AnidbParser, AnidbSearch
 
 SCHEMA_VER = 1
 
-Base = db_schema.versioned_base('anidb_lookup', SCHEMA_VER)
-
-genres_table = Table('anidb_anime_genres', Base.metadata,
-                     Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-                     Column('genre_id', Integer, ForeignKey('anidb_genres.id')),
-                     Index('ix_anidb_anime_genres', 'anidb_id', 'genre_id'))
-Base.register_table(genres_table)
+Base = db_schema.versioned_base('fadbs_lookup', SCHEMA_VER)
 
 creators_table = Table('anidb_anime_creators', Base.metadata,
                        Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
@@ -43,10 +37,18 @@ episodes_table = Table('anidb_anime_episodes', Base.metadata,
                        Index('ix_anidb_anime_episodes', 'anidb_id', 'episode_id'))
 Base.register_table(episodes_table)
 
-
 PLUGIN_ID = 'fadbs_lookup'
 
 log = logging.getLogger(PLUGIN_ID)
+
+
+class AnimeGenreAssociation(Base):
+    __tablename__ = 'anidb_genreassociation'
+
+    anidb_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
+    genre_id = Column(Integer, ForeignKey('anidb_genres.id'), primary_key=True)
+    genre_weight = Column(Integer)
+    genre = relationship("AnimeGenre")
 
 
 class Anime(Base):
@@ -66,7 +68,7 @@ class Anime(Base):
     description = Column(Text)
     permanent_rating = Column(Float)
     mean_rating = Column(Float)
-    genres = relation('AnimeGenre', secondary=genres_table, backref='series')
+    genres = relationship("AnimeGenreAssociation")
     #characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
     episodes = relation('AnimeEpisode', secondary=episodes_table, backref='series')
     year = Column(Integer)
@@ -97,19 +99,11 @@ class AnimeGenre(Base):
     anidb_id = Column(Integer)
     parent_id = Column(Integer, ForeignKey('anidb_genres.id'))
     name = Column(String)
-    weight = Column(Integer)
-    local_spoiler = Column(Boolean)
-    global_spoiler = Column(Boolean)
-    verified = Column(Boolean)
 
-    def __init__(self, anidb_id, name, weight, spoiler, verified, parent=None):
+    def __init__(self, anidb_id, name):
         self.anidb_id = anidb_id
         self.name = name
-        self.weight = weight
-        self.local_spoiler = spoiler['local']
-        self.global_spoiler = spoiler['global']
-        self.verified = verified
-        self.parent_id = parent
+        self.parent_id = None
 
 
 class AnimeCreator(Base):
@@ -210,9 +204,8 @@ class FadbsLookup(object):
         'anidb_startdate': 'start_date',
         'anidb_enddate': 'end_date',
         'anidb_description': 'description',
-        'anidb_tags': lambda series: dict((genre.anidb_id, genre.name) for genre in series.genres),
-        'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)
-    }
+        'anidb_tags': lambda series: dict((genre.genre.name, genre.weight) for genre in series.genres),
+        'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)}
 
     schema = {'type': 'boolean'}
 
@@ -221,7 +214,7 @@ class FadbsLookup(object):
         if not config:
             return
         for entry in task.entries:
-            log.debug(entry)
+            log.debug('Looking up: %s', entry.get('title'))
             self.register_lazy_fields(entry)
 
     def register_lazy_fields(self, entry):
@@ -259,6 +252,9 @@ class FadbsLookup(object):
             entry.update_using_map(self.field_map, series)
             return
 
+        if series is not None:
+            session.commit()
+
         # There is a whole part about expired entries here.
         # Possibly increase the default cache time to a week,
         # and let the user set it themselves if they want, to
@@ -283,9 +279,32 @@ class FadbsLookup(object):
         entry.update_using_map(self.field_map, series)
 
     @staticmethod
-    def __parse_new_series(anidb_id, session):
+    def __query_and_filter(session, what, sql_filter):
+        return session.query(what).filter(sql_filter)
+
+    def __add_genres(self, series, genres_list, session):
+        for item in genres_list:
+            genre = self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['id']).first()
+            if not genre:
+                spoiler = {
+                    'local': item['localspoiler'],
+                    'global': item['globalspoiler']
+                }
+                parent_genre = self.__query_and_filter(session, AnimeGenre,
+                                                       AnimeGenre.anidb_id == item['parentid']).first()
+                genre = AnimeGenre(item['id'], item['name'], item['weight'], spoiler, item['verified'], parent_genre)
+            series.genres.append(genre)
+
+    def __parse_new_series(self, anidb_id, session):
+
+        def __debug_parse(what):
+            log.debug('Parsing %s for AniDB %s', what, anidb_id)
+
         parser = AnidbParser(anidb_id)
+        log.verbose('Starting to parse AniDB %s', anidb_id)
         parser.parse()
+
+        log.debug('Parsed AniDB %s', anidb_id)
         series = Anime()
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes
@@ -295,29 +314,43 @@ class FadbsLookup(object):
         series.description = parser.description
         series.permanent_rating = parser.ratings['permanent']['rating']
         series.mean_rating = parser.ratings['mean']['rating']
+        __debug_parse('genres')
         genres_list = sorted(parser.genres, key=lambda k: k['parentid'])
         for item in genres_list:
             genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['id']).first()
             if not genre:
-                spoiler = {
-                    'local': item['localspoiler'],
-                    'global': item['globalspoiler']
-                }
+                log.debug('%s is not in the genre list, adding', item['name'])
+                genre = AnimeGenre(item['id'], item['name'])
+                if item['parentid']:
+                    parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
+                    if parent_genre:
+                        genre.parent_id = parent_genre.id
+                    else:
+                        log.warning('Genre: %s, parent genre %s is not in the database yet.', item['name'],
+                                    item['parentid'])
+            elif genre.parent_id is None and item['parentid']:
                 parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
-                genre = AnimeGenre(item['id'], item['name'], item['weight'], spoiler, item['verified'], parent_genre)
-            series.genres.append(genre)
+                if parent_genre:
+                    genre.parent_id = parent_genre.id
+                else:
+                    log.warning("Take 2: Genre: %s, parent genre %s is not the in database yet.", item['name'],
+                                item['parentid'])
+            series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
+            series.genres.append(series_genre)
+        __debug_parse('episodes')
         for item in parser.episodes:
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
-                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'], item['length'],
-                                       item['airdate'], item['rating'], item['votes'], series.id)
-                log.debug("aid:%s, episode: %s", anidb_id, item)
+                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'],
+                                       item['length'], item['airdate'], item['rating'], item['votes'])
+                __debug_parse('episode_titles')
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
                     if not lang:
                         lang = AnimeLangauge(item_title['lang'])
                     episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
             series.episodes.append(episode)
+        __debug_parse('titles')
         for item in parser.titles:
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
             if not lang:
