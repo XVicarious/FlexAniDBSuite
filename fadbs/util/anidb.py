@@ -8,6 +8,8 @@ from bs4 import Tag
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
+from .anidb_cache import get_anidb_cache
+
 PLUGIN_ID = 'fadbs.util.anidb'
 
 CLIENT_STR = 'fadbs'
@@ -169,9 +171,11 @@ class AnidbParser(object):
         url = self.anidb_xml_url % self.anidb_id
 
         if not soup:
-            page = requests.get(url, params={'client': CLIENT_STR, 'clientver': CLIENT_VER, 'protover': 1})
-            print(page.url)
-            soup = get_soup(page.text)
+            request_url = url + "&client=%s&clientver=%s&protover=1" % (CLIENT_STR, CLIENT_VER)
+            page = get_anidb_cache(request_url)
+            print(request_url)
+            page = open(page, 'r')
+            soup = get_soup(page, parser="lxml")
 
         root = soup.find('anime')
 
