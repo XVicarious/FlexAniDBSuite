@@ -160,14 +160,14 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id, number, ep_type, length, airdate, rating, votes, parent):
+    def __init__(self, anidb_id, number, length, airdate, rating, parent):
         self.anidb_id = anidb_id
-        self.number = number
-        self.ep_type = ep_type
+        self.number = number[0]
+        self.ep_type = number[1]
         self.length = length
         self.airdate = airdate
-        self.rating = rating
-        self.votes = votes
+        self.rating = rating[0]
+        self.votes = rating[1]
         self.parent_id = parent
 
 
@@ -314,6 +314,7 @@ class FadbsLookup(object):
         series.description = parser.description
         series.permanent_rating = parser.ratings['permanent']['rating']
         series.mean_rating = parser.ratings['mean']['rating']
+
         __debug_parse('genres')
         genres_list = sorted(parser.genres, key=lambda k: k['parentid'])
         for item in genres_list:
@@ -341,8 +342,9 @@ class FadbsLookup(object):
         for item in parser.episodes:
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
-                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'],
-                                       item['length'], item['airdate'], item['rating'], item['votes'], series.id)
+                rating = [item['rating'], item['votes']]
+                number = [item['episode_number'], item['episode_type']]
+                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
                 __debug_parse('episode_titles')
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
@@ -350,6 +352,7 @@ class FadbsLookup(object):
                         lang = AnimeLangauge(item_title['lang'])
                     episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
             series.episodes.append(episode)
+
         __debug_parse('titles')
         for item in parser.titles:
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
