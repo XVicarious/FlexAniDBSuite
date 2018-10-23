@@ -204,7 +204,7 @@ class FadbsLookup(object):
         'anidb_startdate': 'start_date',
         'anidb_enddate': 'end_date',
         'anidb_description': 'description',
-        'anidb_tags': lambda series: dict((genre.genre.name, genre.weight) for genre in series.genres),
+        'anidb_tags': lambda series: dict((genre.genre.name, genre.genre_weight) for genre in series.genres),
         'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)}
 
     schema = {'type': 'boolean'}
@@ -342,7 +342,7 @@ class FadbsLookup(object):
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
                 episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'],
-                                       item['length'], item['airdate'], item['rating'], item['votes'])
+                                       item['length'], item['airdate'], item['rating'], item['votes'], series.id)
                 __debug_parse('episode_titles')
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
