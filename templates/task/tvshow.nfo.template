@@ -1,0 +1,29 @@
+<tvshow>
+    <anidbid>{{ anidb_id }}</anidbid>
+    <title>{{ anidb_name }}</title>
+    <sorttitle></sorttitle>
+    {% if anidb_startdate %}
+    <premiered>{{ anidb_startdate }}</premiered>
+    {% endif %}
+    <ratings>
+        <rating name="permanent" max="10">
+            <value>{{ anidb_rating }}</value>
+            <votes></votes>
+        </rating>
+        <rating name="mean" max="10">
+            <value>{{ anidb_mean_rating }}</value>
+            <votes></votes>
+        </rating>
+    </ratings>
+    <episode>{{ anidb_num_episodes }}</episode> {# number of episodes #}
+    <runtime></runtime>
+    {% if anidb_tags %}
+    {% for genre, weight in anidb_tags.items() %}
+    {% if weight > 0 %}
+      <genre>{{ genre }}</genre>
+    {% else %}
+      <tag>{{ genre }}</tag>
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+</tvshow>
