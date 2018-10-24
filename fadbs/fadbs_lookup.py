@@ -317,7 +317,7 @@ class FadbsLookup(object):
                 genres.remove(genre)
         return genres
 
-    def __add_genres(self, *series, genres, session):
+    def __add_genres(self, series, genres, session):
         genres = self.__remove_blacklist(genres)
         genres_list = sorted(genres, key=lambda k: k['parentid'])
         for item in genres_list:
@@ -325,7 +325,7 @@ class FadbsLookup(object):
             if not genre:
                 log.debug('%s is not in the genre list, adding', item['name'])
                 genre = AnimeGenre(item['id'], item['name'])
-                if item['parentid']:
+                if item['parentid']:  # todo: merge with below elif
                     parent_genre = \
                         self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
                     if parent_genre:
@@ -333,7 +333,7 @@ class FadbsLookup(object):
                     else:
                         log.warning('Genre: %s, parent genre %s is not in the database yet.', item['name'],
                                     item['parentid'])
-            elif genre.parent_id is None and item['parentid']:
+            elif genre.parent_id is None and item['parentid']:  # todo: merge with above if item['parentid']
                 parent_genre = \
                     self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
                 if parent_genre:
@@ -343,6 +343,23 @@ class FadbsLookup(object):
                                 item['parentid'])
             series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
             series.genres.append(series_genre)
+        return series
+
+    def __add_episodes(self, series, episodes, session):
+        for item in episodes:
+            episode = self.__query_and_filter(session, AnimeEpisode, AnimeEpisode.anidb_id == item['id']).first()
+            if not episode:
+                rating = [item['rating'], item['votes']]
+                number = [item['episode_number'], item['episode_type']]
+                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
+                for item_title in item['titles']:
+                    lang = self.__query_and_filter(session, AnimeLangauge,
+                                                   AnimeLangauge.name == item_title['lang']).first()
+                    if not lang:
+                        lang = AnimeLangauge(item_title['lang'])
+                    episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
+            series.episodes.append(episode)
+        return series
 
     def __parse_new_series(self, anidb_id, session):
 
@@ -365,22 +382,10 @@ class FadbsLookup(object):
         series.mean_rating = parser.ratings['mean']['rating']
 
         __debug_parse('genres')
-        self.__add_genres(series, parser.genres, session)
+        series = self.__add_genres(series, parser.genres, session)
 
         __debug_parse('episodes')
-        for item in parser.episodes:
-            episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
-            if not episode:
-                rating = [item['rating'], item['votes']]
-                number = [item['episode_number'], item['episode_type']]
-                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
-                __debug_parse('episode_titles')
-                for item_title in item['titles']:
-                    lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
-                    if not lang:
-                        lang = AnimeLangauge(item_title['lang'])
-                    episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
-            series.episodes.append(episode)
+        series = self.__add_episodes(series, parser.episodes, session)
 
         __debug_parse('titles')
         for item in parser.titles:
