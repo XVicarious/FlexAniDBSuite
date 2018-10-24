@@ -207,6 +207,27 @@ class FadbsLookup(object):
         'anidb_tags': lambda series: dict((genre.genre.name, genre.genre_weight) for genre in series.genres),
         'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)}
 
+    # A tag id with True will remove that tag and all decedents, False just removes that tag
+    default_tag_blacklist = {
+        -1: True,
+        30: True,
+        2131: True,
+        2604: False,
+        2605: False,
+        6230: False,
+        6246: False,
+        3683: False,
+        2606: False,
+        2608: False,
+        2609: False,
+        2610: False,
+        2612: False,
+        2613: False,
+        2611: False,
+        6151: False,
+        6173: False
+    }
+
     schema = {'type': 'boolean'}
 
     @plugin.priority(130)
@@ -282,7 +303,22 @@ class FadbsLookup(object):
     def __query_and_filter(session, what, sql_filter):
         return session.query(what).filter(sql_filter)
 
+    def __remove_blacklist(self, genres):
+        temp_genres = genres
+        for genre in temp_genres:
+            if genre['id'] in self.default_tag_blacklist:
+                if self.default_tag_blacklist.get(genre['id']):
+                    intermediate_genres = [genre['id']]
+                    i = 0
+                    while i < len(genres):
+                        if genres[i]['parentid'] in intermediate_genres:
+                            genres.remove(genres[i])
+                            i = 0
+                genres.remove(genre)
+        return genres
+
     def __add_genres(self, *series, genres, session):
+        genres = self.__remove_blacklist(genres)
         genres_list = sorted(genres, key=lambda k: k['parentid'])
         for item in genres_list:
             genre = self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['id']).first()
