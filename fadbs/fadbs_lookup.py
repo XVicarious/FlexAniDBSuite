@@ -204,20 +204,22 @@ class FadbsLookup(object):
         'anidb_startdate': 'start_date',
         'anidb_enddate': 'end_date',
         'anidb_description': 'description',
-        'anidb_tags': lambda series: dict((genre.genre.name, genre.genre_weight) for genre in series.genres),
+        'anidb_tags': lambda series: dict(
+            (genre.genre.anidb_id, [genre.genre.name, genre.genre_weight]) for genre in series.genres),
         'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)}
 
     # A tag id with True will remove that tag and all decedents, False just removes that tag
     default_tag_blacklist = {
         -1: True,
         30: True,
-        2131: True,
+        2931: True,
         2604: False,
         2605: False,
         6230: False,
         6246: False,
         3683: False,
         2606: False,
+        2607: False,
         2608: False,
         2609: False,
         2610: False,
