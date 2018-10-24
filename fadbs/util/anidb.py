@@ -56,11 +56,18 @@ class AnidbParser(object):
 
     RESOURCE_MIN_CACHE = 24 * 60 * 60
 
+    seasons = [
+        'Winter',
+        'Spring',
+        'Summer',
+        'Fall'
+    ]
+
     def __init__(self, anidb_id):
         self.anidb_id = anidb_id
         self.type = None  # type
         self.num_episodes = None  # episodecount
-        self.dates = None  # startdate, enddate
+        self.dates = {}  # startdate, enddate
         self.titles = []  # titles > title
         self.related_anime = []  # relatedanime
         self.similar_anime = []  # similaranime
@@ -71,6 +78,8 @@ class AnidbParser(object):
         self.genres = []  # tags
         self.characters = []  # characters
         self.episodes = []  # episodes
+        self.year = None
+        self.season = None
 
     def __str__(self):
         return '<AnidbParser (name=%s, anidb_id=%s)>' % ('WIP', self.anidb_id)
@@ -167,6 +176,36 @@ class AnidbParser(object):
         for item in contents.find_all(True, recursive=False):
             callback(item)
 
+    def __season(self, month):
+        # I feel this could be better?
+        if 1 <= month <= 3:
+            return self.seasons[0]
+        elif 4 <= month <= 6:
+            return self.seasons[1]
+        elif 7 <= month <= 9:
+            return self.seasons[2]
+        return self.seasons[3]
+
+    def __set_dates(self, start_tag, end_tag):
+        if start_tag:
+            start_parts = start_tag.string.split('-')
+            if len(start_parts) == 3:
+                self.dates['start'] = datetime.strptime(start_tag.string, self.DATE_FORMAT).date()
+            if len(start_parts) >= 2:
+                self.season = self.__season(int(start_parts[1]))
+            self.year = int(start_parts[0])
+
+        if end_tag:
+            if len(end_tag.string.split('-')) == 3:
+                self.dates['end'] = datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
+
+    def __set_sim_rel(self, similar_tag, related_tag):
+        if similar_tag is not None:
+            self.__parse_tiered_tag(similar_tag, self.__append_similar)
+
+        if related_tag is not None:
+            self.__parse_tiered_tag(related_tag, self.__append_related)
+
     def parse(self, soup=None):
         url = self.anidb_xml_url % self.anidb_id
 
@@ -182,32 +221,26 @@ class AnidbParser(object):
         try:
             self.type = root.find('type').string
         except AttributeError:
-            self.type = None
+            pass
 
         try:
             self.num_episodes = int(root.find('episodecount').string)
         except AttributeError:
             self.num_episodes = 0
 
-        start_tag = root.find('startdate')
-        end_tag = root.find('enddate')
-        self.dates = {
-            'start': None if start_tag is None else datetime.strptime(start_tag.string, self.DATE_FORMAT).date(),
-            'end': None if end_tag is None else datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
-        }
+        self.__set_dates(root.find('startdate'), root.find('enddate'))
 
         self.__parse_tiered_tag(root.find('titles'), self.__append_title)
 
-        related_tag = root.find('relatedanime')
-        if related_tag is not None:
-            self.__parse_tiered_tag(related_tag, self.__append_related)
+        self.__set_sim_rel(root.find('similaranime'), root.find('related_anime'))
 
-        similar_tag = root.find('similaranime')
-        if similar_tag is not None:
-            self.__parse_tiered_tag(similar_tag, self.__append_similar)
+        try:
+            self.official_url = root.find('url').string
+        except AttributeError:
+            pass
 
-        self.official_url = root.find('url').string
         self.__parse_tiered_tag(root.find('creators'), self.__append_creator)
+
         self.description = root.find('description').string
 
         ratings_tag = root.find('ratings')
