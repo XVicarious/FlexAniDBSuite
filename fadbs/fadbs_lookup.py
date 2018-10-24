@@ -306,16 +306,26 @@ class FadbsLookup(object):
         return session.query(what).filter(sql_filter)
 
     def __remove_blacklist(self, genres):
-        temp_genres = genres
+        temp_genres = genres.copy()
         for genre in temp_genres:
+            log.trace('Checking %s (%s)', genre['name'], genre['id'])
             if genre['id'] in self.default_tag_blacklist:
+                log.debug('%s (%s) is in the blacklist... Taking action.', genre['name'], genre['id'])
                 if self.default_tag_blacklist.get(genre['id']):
+                    log.debug('%s (%s) is set to true in the blacklist... Purging it\'s decendants.', genre['name'],
+                              genre['id'])
                     intermediate_genres = [genre['id']]
                     i = 0
                     while i < len(genres):
+                        log.trace('%s of %s', i, len(genres) - 1)
                         if genres[i]['parentid'] in intermediate_genres:
+                            log.debug('%s (%s) decends from %s (%s), removing.', genres[i]['name'], genres[i]['id'],
+                                      genre['name'], genre['id'])
+                            intermediate_genres.append(genres[i]['id'])
                             genres.remove(genres[i])
                             i = 0
+                        else:
+                            i += 1
                 genres.remove(genre)
         return genres
 
