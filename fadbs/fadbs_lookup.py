@@ -380,8 +380,11 @@ class FadbsLookup(object):
         series.end_date = parser.dates['end']
         series.url = parser.official_url
         series.description = parser.description
-        series.permanent_rating = parser.ratings['permanent']['rating']
-        series.mean_rating = parser.ratings['mean']['rating']
+        if parser.ratings:
+            permanent_rating = parser.ratings['permanent']
+            series.permanent_rating = None if permanent_rating is None else permanent_rating['rating']
+            mean_rating = parser.ratings['mean']
+            series.mean_rating = None if mean_rating is None else mean_rating['rating']
 
         __debug_parse('genres')
         series = self.__add_genres(series, parser.genres, session)
