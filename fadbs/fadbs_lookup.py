@@ -337,22 +337,14 @@ class FadbsLookup(object):
             if not genre:
                 log.debug('%s is not in the genre list, adding', item['name'])
                 genre = AnimeGenre(item['id'], item['name'])
-                if item['parentid']:  # todo: merge with below elif
-                    parent_genre = \
-                        self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
-                    if parent_genre:
-                        genre.parent_id = parent_genre.id
-                    else:
-                        log.warning('Genre: %s, parent genre %s is not in the database yet.', item['name'],
-                                    item['parentid'])
-            elif genre.parent_id is None and item['parentid']:  # todo: merge with above if item['parentid']
+            if genre.parent_id is None and item['parentid']:  # todo: merge with below elif
                 parent_genre = \
                     self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
                 if parent_genre:
                     genre.parent_id = parent_genre.id
                 else:
-                    log.warning("Take 2: Genre: %s, parent genre %s is not the in database yet.", item['name'],
-                                item['parentid'])
+                    log.warning("Genre %s parent genre, %s, is not in the database yet. " +
+                                "When it's found, it will be added", item['name'], item['parentid'])
             series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
             series.genres.append(series_genre)
         return series
