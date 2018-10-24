@@ -160,14 +160,14 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id, number, ep_type, length, airdate, rating, votes, parent):
+    def __init__(self, anidb_id, number, length, airdate, rating, parent):
         self.anidb_id = anidb_id
-        self.number = number
-        self.ep_type = ep_type
+        self.number = number[0]
+        self.ep_type = number[1]
         self.length = length
         self.airdate = airdate
-        self.rating = rating
-        self.votes = votes
+        self.rating = rating[0]
+        self.votes = rating[1]
         self.parent_id = parent
 
 
@@ -282,18 +282,31 @@ class FadbsLookup(object):
     def __query_and_filter(session, what, sql_filter):
         return session.query(what).filter(sql_filter)
 
-    def __add_genres(self, series, genres_list, session):
+    def __add_genres(self, *series, genres, session):
+        genres_list = sorted(genres, key=lambda k: k['parentid'])
         for item in genres_list:
             genre = self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['id']).first()
             if not genre:
-                spoiler = {
-                    'local': item['localspoiler'],
-                    'global': item['globalspoiler']
-                }
-                parent_genre = self.__query_and_filter(session, AnimeGenre,
-                                                       AnimeGenre.anidb_id == item['parentid']).first()
-                genre = AnimeGenre(item['id'], item['name'], item['weight'], spoiler, item['verified'], parent_genre)
-            series.genres.append(genre)
+                log.debug('%s is not in the genre list, adding', item['name'])
+                genre = AnimeGenre(item['id'], item['name'])
+                if item['parentid']:
+                    parent_genre = \
+                        self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
+                    if parent_genre:
+                        genre.parent_id = parent_genre.id
+                    else:
+                        log.warning('Genre: %s, parent genre %s is not in the database yet.', item['name'],
+                                    item['parentid'])
+            elif genre.parent_id is None and item['parentid']:
+                parent_genre = \
+                    self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
+                if parent_genre:
+                    genre.parent_id = parent_genre.id
+                else:
+                    log.warning("Take 2: Genre: %s, parent genre %s is not the in database yet.", item['name'],
+                                item['parentid'])
+            series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
+            series.genres.append(series_genre)
 
     def __parse_new_series(self, anidb_id, session):
 
@@ -314,35 +327,17 @@ class FadbsLookup(object):
         series.description = parser.description
         series.permanent_rating = parser.ratings['permanent']['rating']
         series.mean_rating = parser.ratings['mean']['rating']
+
         __debug_parse('genres')
-        genres_list = sorted(parser.genres, key=lambda k: k['parentid'])
-        for item in genres_list:
-            genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['id']).first()
-            if not genre:
-                log.debug('%s is not in the genre list, adding', item['name'])
-                genre = AnimeGenre(item['id'], item['name'])
-                if item['parentid']:
-                    parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
-                    if parent_genre:
-                        genre.parent_id = parent_genre.id
-                    else:
-                        log.warning('Genre: %s, parent genre %s is not in the database yet.', item['name'],
-                                    item['parentid'])
-            elif genre.parent_id is None and item['parentid']:
-                parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
-                if parent_genre:
-                    genre.parent_id = parent_genre.id
-                else:
-                    log.warning("Take 2: Genre: %s, parent genre %s is not the in database yet.", item['name'],
-                                item['parentid'])
-            series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
-            series.genres.append(series_genre)
+        self.__add_genres(series, parser.genres, session)
+
         __debug_parse('episodes')
         for item in parser.episodes:
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
-                episode = AnimeEpisode(item['id'], item['episode_number'], item['episode_type'],
-                                       item['length'], item['airdate'], item['rating'], item['votes'], series.id)
+                rating = [item['rating'], item['votes']]
+                number = [item['episode_number'], item['episode_type']]
+                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
                 __debug_parse('episode_titles')
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
@@ -350,6 +345,7 @@ class FadbsLookup(object):
                         lang = AnimeLangauge(item_title['lang'])
                     episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
             series.episodes.append(episode)
+
         __debug_parse('titles')
         for item in parser.titles:
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
