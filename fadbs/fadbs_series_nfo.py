@@ -45,12 +45,14 @@ class FadbsSeriesNfo(object):
     }
 
     def on_task_output(self, task, config):
+        log.info('Starting fadbs_series_nfo')
         filename = os.path.expanduser('tvshow.nfo.template')
         for entry in task.entries:
+            log.debug('Starting nfo generation for %s', entry['title'])
             # Load stuff
             entry_tags = entry.get('anidb_tags')
             if entry_tags is None:
-                return
+                continue
             fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
             entry['fadbs_nfo'] = {}
             entry['fadbs_nfo'].update({'genres': fadbs_nfo[0]})

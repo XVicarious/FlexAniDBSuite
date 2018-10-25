@@ -173,6 +173,9 @@ class AnidbParser(object):
 
     @staticmethod
     def __parse_tiered_tag(contents, callback):
+        if contents is None:
+            log.warning('%s passed None to __parse_tiered_tag', callback.__name__)
+            return
         for item in contents.find_all(True, recursive=False):
             callback(item)
 
@@ -198,6 +201,8 @@ class AnidbParser(object):
         if end_tag:
             if len(end_tag.string.split('-')) == 3:
                 self.dates['end'] = datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
+            else:
+                self.dates['end'] = None
 
     def __set_sim_rel(self, similar_tag, related_tag):
         if similar_tag is not None:
@@ -241,7 +246,9 @@ class AnidbParser(object):
 
         self.__parse_tiered_tag(root.find('creators'), self.__append_creator)
 
-        self.description = root.find('description').string
+        tag_description = root.find('description')
+        if tag_description is not None:
+            self.description = tag_description.string
 
         ratings_tag = root.find('ratings')
         if ratings_tag is not None:

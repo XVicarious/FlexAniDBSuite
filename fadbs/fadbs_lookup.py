@@ -265,7 +265,12 @@ class FadbsLookup(object):
         elif entry.get('title', eval_lazy=False):
             log.debug('We need to find that id, lets give it a search...')
             searcher = AnidbSearch()
-            entry['anidb_id'] = searcher.by_name_exact(entry['title'])
+            # todo: make this better
+            try:
+                entry['anidb_id'] = searcher.by_name_exact(entry['title'])
+            except TypeError:
+                return
+            # end
         else:
             raise plugin.PluginError("Oh no, we didn't do it :(")
 
@@ -379,7 +384,12 @@ class FadbsLookup(object):
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes
         series.start_date = parser.dates['start']
-        series.end_date = parser.dates['end']
+        # todo: make this better
+        try:
+            series.end_date = parser.dates['end']
+        except KeyError:
+            pass
+        # end
         series.url = parser.official_url
         series.description = parser.description
         if parser.ratings:

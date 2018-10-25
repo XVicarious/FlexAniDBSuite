@@ -1,6 +1,6 @@
 <tvshow>
     <anidbid>{{ anidb_id }}</anidbid>
-    <title>{{ anidb_name }}</title>
+    <title>{{ anidb_titles[0] }}</title>{# todo: allow selection of title #}
     <sorttitle></sorttitle>
     {% if anidb_startdate %}
     <premiered>{{ anidb_startdate }}</premiered>
