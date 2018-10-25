@@ -21,4 +21,4 @@ FADBS aims to enable as full of an automated workflow as possible with AniDB and
 
 ### What Works
 * The `anidb_list` plugin included in the base Flexget package has an open pull request to fix it. This plugin, despite it's name is to fetch your wishlist
-* Fetch AniDB anime entry, and parse the information into an object.
+* Fetch AniDB anime entry, and parse the information into an object with `fadbs_lookup`
