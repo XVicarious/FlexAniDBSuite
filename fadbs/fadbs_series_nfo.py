@@ -51,10 +51,13 @@ class FadbsSeriesNfo(object):
             entry_tags = entry.get('anidb_tags')
             if entry_tags is None:
                 return
-            entry['fadbs_nfo']['genres'], entry['fadbs_nfo']['tags'] = \
-                self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
+            fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
+            entry['fadbs_nfo'] = {}
+            entry['fadbs_nfo'].update({'genres': fadbs_nfo[0]})
+            entry['fadbs_nfo'].update({'tags': fadbs_nfo[1]})
             template_ = template.render_from_entry(template.get_template(filename), entry)
-            with open(entry.get('anidb_name') + '.tvshow.nfo', 'wb') as nfo:
+            nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
+            with open(nfo_path, 'wb') as nfo:
                 nfo.write(template_.encode('utf-8'))
                 nfo.close()
 
