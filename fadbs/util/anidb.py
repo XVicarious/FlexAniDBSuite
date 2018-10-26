@@ -1,14 +1,16 @@
 from __future__ import unicode_literals, division, absolute_import
 
-import logging
+import hashlib
+import os
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
 
 from bs4 import Tag
+from flexget import logging
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
-from .anidb_cache import get_anidb_cache
+from .anidb_cache import cached_anidb, ANIDB_CACHE
 
 PLUGIN_ID = 'fadbs.util.anidb'
 
@@ -211,15 +213,36 @@ class AnidbParser(object):
         if related_tag is not None:
             self.__parse_tiered_tag(related_tag, self.__append_related)
 
+    @cached_anidb
     def parse(self, soup=None):
-        url = self.anidb_xml_url % self.anidb_id
 
         if not soup:
-            request_url = url + "&client=%s&clientver=%s&protover=1" % (CLIENT_STR, CLIENT_VER)
-            page = get_anidb_cache(request_url)
-            print(request_url)
+            pre_cache_name = ('anime: %s' % self.anidb_id).encode()
+            url = (self.anidb_xml_url + "&client=%s&clientver=%s&protover=1") % (self.anidb_id, CLIENT_STR, CLIENT_VER)
+            log.debug('Not in cache. Looking up URL: %s', url)
+            page = requests.get(url)
+            page = page.text
             page = open(page, 'r')
+            # todo: move this to cached_anidb
+            from flexget.manager import manager
+            if 'blake2b' in hashlib.algorithms_available:
+                blake = hashlib.new('blake2b')
+                blake.update(pre_cache_name)
+                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, blake.hexdigest())
+            else:
+                md5sum = hashlib.md5(pre_cache_name).hexdigest()
+                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, md5sum)
+            with open(cache_filename, 'w') as cache_file:
+                cache_file.write(page.read())
+                cache_file.close()
+                log.debug('%s cached.', self.anidb_id)
+            # end
             soup = get_soup(page, parser="lxml")
+            page.close()
+            # We should really check if we're banned or what...
+            if not soup:
+                log.warning('Uh oh: %s', url)
+                return
 
         root = soup.find('anime')
 
