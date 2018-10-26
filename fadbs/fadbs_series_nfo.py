@@ -57,12 +57,7 @@ class FadbsSeriesNfo(object):
             entry['fadbs_nfo'] = {}
             entry_titles = entry.get('anidb_titles')
             if entry_titles:
-                try:
-                    entry['fadbs_nfo'].update(
-                        title=find_in_list_of_dict(entry_titles[config['type']], 'lang', config['lang'], 'name'))
-                except (AttributeError, TypeError):
-                    entry['fadbs_nfo'].update(
-                        title=find_in_list_of_dict(entry_titles['main'], 'lang', 'x-jat', 'name'))
+                entry['fadbs_nfo'].update(title=self.__main_title(config, entry_titles))
             entry_tags = entry.get('anidb_tags')
             if entry_tags:
                 fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
@@ -87,6 +82,15 @@ class FadbsSeriesNfo(object):
         log.info('Genres: %s', genres)
         log.info('Tags: %s', tags)
         return genres, tags
+
+    @staticmethod
+    def __main_title(config, titles):
+        title = None
+        if 'type' in config and 'lang' in config:
+            title = find_in_list_of_dict(config['type'], 'lang', config['lang'], 'name')
+        if title is None or (isinstance(config, bool) and config):
+            return find_in_list_of_dict(titles['main'], 'lang', 'x-jat', 'name')
+        return title
 
 
 @event('plugin.register')
