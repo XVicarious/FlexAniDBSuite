@@ -1,10 +1,10 @@
 from __future__ import unicode_literals, division, absolute_import
 
-import logging
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
 
 from flexget import db_schema, plugin
+from flexget import logging
 from flexget.db_schema import UpgradeImpossible
 from flexget.event import event
 from flexget.utils.database import with_session
@@ -194,8 +194,20 @@ def upgrade(ver, session):
 
 class FadbsLookup(object):
 
+    @staticmethod
+    def _title_dict(series):
+        titles = {}
+        for title in series.titles:
+            if title.ep_type not in titles:
+                titles.update({title.ep_type: []})
+            titles[title.ep_type].append({
+                'lang': title.language,
+                'name': title.name
+            })
+        return titles
+
     field_map = {
-        'anidb_titles': lambda series: [title.name for title in series.titles],
+        'anidb_titles': lambda series: FadbsLookup._title_dict(series),
         'anidb_type': 'series_type',
         'anidb_num_episodes': 'num_episodes',
         'anidb_rating': 'permanent_rating',

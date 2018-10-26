@@ -1,9 +1,10 @@
-import logging
 import os
 
-from flexget import plugin
+from flexget import plugin, logging
 from flexget.event import event
 from flexget.utils import template
+
+from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
@@ -11,17 +12,23 @@ log = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsSeriesNfo(object):
-
     plugin_path = os.path.realpath(__file__)
     last_sep = plugin_path.rfind(os.sep)
     nfo_path = plugin_path[:last_sep] + os.sep + 'templates' + os.sep + 'task' + os.sep + 'tvshow.nfo.template'
 
     schema = {
-        'type': 'object',
-        'properties': {
-            'genre_weight': {'type': 'integer', 'default': 400},
-            'spoilers': {'type': 'array', 'items': {'type': 'string', 'enum': ['local', 'global']}}
-        }
+        'oneOf': [
+            {'type': 'boolean', 'default': False},
+            {'type': 'object',
+             'properties': {
+                 'genre_weight': {'type': 'integer', 'default': -1},
+                 'spoilers': {'type': 'array', 'items': {'type': 'string', 'enum': ['local', 'global']}},
+                 'title': {'type': 'object',
+                           'properties': {
+                               'type': {'type': 'string', 'default': 'main',
+                                        'emum': ['main', 'official', 'synonym', 'short']},
+                               'lang': {'type': 'string', 'default': 'x-jat'}}}}}
+        ]
     }
 
     # These are all genres, genres that are True don't have possible overriding sub-genres
@@ -50,13 +57,20 @@ class FadbsSeriesNfo(object):
         for entry in task.entries:
             log.debug('Starting nfo generation for %s', entry['title'])
             # Load stuff
-            entry_tags = entry.get('anidb_tags')
-            if entry_tags is None:
-                continue
-            fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
             entry['fadbs_nfo'] = {}
-            entry['fadbs_nfo'].update({'genres': fadbs_nfo[0]})
-            entry['fadbs_nfo'].update({'tags': fadbs_nfo[1]})
+            entry_titles = entry.get('anidb_titles')
+            if entry_titles:
+                try:
+                    entry['fadbs_nfo'].update(
+                        title=find_in_list_of_dict(entry_titles[config['type']], 'lang', config['lang'], 'name'))
+                except (AttributeError, TypeError):
+                    entry['fadbs_nfo'].update(
+                        title=find_in_list_of_dict(entry_titles['main'], 'lang', 'x-jat', 'name'))
+            entry_tags = entry.get('anidb_tags')
+            if entry_tags:
+                fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
+                entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
+                entry['fadbs_nfo'].update(tags=fadbs_nfo[1])
             template_ = template.render_from_entry(template.get_template(filename), entry)
             nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
             with open(nfo_path, 'wb') as nfo:
