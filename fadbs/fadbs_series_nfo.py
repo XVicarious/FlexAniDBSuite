@@ -12,9 +12,6 @@ log = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsSeriesNfo(object):
-    plugin_path = os.path.realpath(__file__)
-    last_sep = plugin_path.rfind(os.sep)
-    nfo_path = plugin_path[:last_sep] + os.sep + 'templates' + os.sep + 'task' + os.sep + 'tvshow.nfo.template'
 
     schema = {
         'oneOf': [
