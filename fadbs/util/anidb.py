@@ -196,6 +196,8 @@ class AnidbParser(object):
             start_parts = start_tag.string.split('-')
             if len(start_parts) == 3:
                 self.dates['start'] = datetime.strptime(start_tag.string, self.DATE_FORMAT).date()
+            else:
+                self.dates['start'] = None
             if len(start_parts) >= 2:
                 self.season = self.__season(int(start_parts[1]))
             self.year = int(start_parts[0])
