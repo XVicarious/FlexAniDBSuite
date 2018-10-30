@@ -2,9 +2,12 @@ from __future__ import unicode_literals, division, absolute_import
 
 import hashlib
 import os
+import urllib
+import re
+import difflib
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-
+from slugify import slugify
 from bs4 import Tag
 from flexget import logging
 from flexget.utils.requests import Session, TimedLimiter
@@ -30,9 +33,27 @@ class AnidbSearch(object):
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime'
     prelook_url = 'http://anisearch.outrance.pl?task=search'
+    cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
+    particle_words = {
+        'x-jat': {
+            'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa'
+        }
+    }
 
     def __init__(self):
         self.debug = False
+
+    def __get_title_comparisons(self, original_title, anime_objects, min_ratio=0.5):
+        titles = []
+        for anime in anime_objects:
+            aid = anime['aid']
+            for title in anime.find_all('title'):
+                title_string = self.cdata_regex.findall(title.string)[0]
+                diff_ratio = difflib.SequenceMatcher(a=original_title.lower(), b=title_string.lower()).ratio()
+                if diff_ratio >= min_ratio:
+                    titles.append([aid, diff_ratio, title_string])
+        log.verbose('Returning %s titles with at least %s similarity.', len(titles), min_ratio)
+        return titles
 
     def by_name_exact(self, anime_name):
         """
@@ -41,12 +62,20 @@ class AnidbSearch(object):
         :param anime_name: name of the anime
         :return: an anidb id, hopefully
         """
-        search_url = self.prelook_url + '&query="%s"' % anime_name
+        name_parts = slugify(anime_name).split('-')
+        name_parts = ['~' + part if part in self.particle_words['x-jat'] else part for part in name_parts]
+        anime_name_mod = ' '.join(name_parts)
+        search_url = self.prelook_url + "&query='%s'" % anime_name_mod
+        print(search_url)
         req = requests.get(search_url)
         if req.status_code != 200:
             raise Exception
         soup = get_soup(req.text)
-        return soup.find('anime')['aid']
+        matches = self.__get_title_comparisons(anime_name, soup.find_all('anime'))
+        matches.sort(key=lambda x: x[1], reverse=True)
+        if matches[0][1] > 1:
+            log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"', anime_name, matches[0][2])
+        return matches[0][0]
 
 
 class AnidbParser(object):
