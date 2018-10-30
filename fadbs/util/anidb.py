@@ -2,7 +2,6 @@ from __future__ import unicode_literals, division, absolute_import
 
 import hashlib
 import os
-import urllib
 import re
 import difflib
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
@@ -74,7 +73,8 @@ class AnidbSearch(object):
         matches = self.__get_title_comparisons(anime_name, soup.find_all('anime'))
         matches.sort(key=lambda x: x[1], reverse=True)
         if matches[0][1] > 1:
-            log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"', anime_name, matches[0][2])
+            log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"',
+                        anime_name, matches[0][2])
         return matches[0][0]
 
 
