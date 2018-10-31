@@ -256,7 +256,7 @@ class AnidbParser(object):
                 md5sum = hashlib.md5(pre_cache_name).hexdigest()
                 cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, md5sum)
             with open(cache_filename, 'w') as cache_file:
-                cache_file.write(page.read())
+                cache_file.write(page)
                 cache_file.close()
                 log.debug('%s cached.', self.anidb_id)
             # end
