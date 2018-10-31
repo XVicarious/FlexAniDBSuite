@@ -6,11 +6,11 @@ import re
 import difflib
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-from slugify import slugify
 from bs4 import Tag
 from flexget import logging
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
+from slugify import slugify
 
 from .anidb_cache import cached_anidb, ANIDB_CACHE
 
@@ -50,6 +50,8 @@ class AnidbSearch(object):
                 title_string = self.cdata_regex.findall(title.string)[0]
                 diff_ratio = difflib.SequenceMatcher(a=original_title.lower(), b=title_string.lower()).ratio()
                 if diff_ratio >= min_ratio:
+                    log.debug('Title "%s" matches "%s" with %s similarity, which is above %s.',
+                              title_string, original_title, diff_ratio, min_ratio)
                     titles.append([aid, diff_ratio, title_string])
         log.verbose('Returning %s titles with at least %s similarity.', len(titles), min_ratio)
         return titles
@@ -87,12 +89,12 @@ class AnidbParser(object):
 
     RESOURCE_MIN_CACHE = 24 * 60 * 60
 
-    seasons = [
-        'Winter',
-        'Spring',
-        'Summer',
-        'Fall'
-    ]
+    seasons = {
+        ('Winter', range(1, 4)),
+        ('Spring', range(4, 7)),
+        ('Summer', range(7, 10)),
+        ('Fall', range(10, 13))
+    }
 
     def __init__(self, anidb_id):
         self.anidb_id = anidb_id
@@ -210,16 +212,6 @@ class AnidbParser(object):
         for item in contents.find_all(True, recursive=False):
             callback(item)
 
-    def __season(self, month):
-        # I feel this could be better?
-        if 1 <= month <= 3:
-            return self.seasons[0]
-        elif 4 <= month <= 6:
-            return self.seasons[1]
-        elif 7 <= month <= 9:
-            return self.seasons[2]
-        return self.seasons[3]
-
     def __set_dates(self, start_tag, end_tag):
         if start_tag:
             start_parts = start_tag.string.split('-')
@@ -228,7 +220,8 @@ class AnidbParser(object):
             else:
                 self.dates['start'] = None
             if len(start_parts) >= 2:
-                self.season = self.__season(int(start_parts[1]))
+                month = int(start_parts[1])
+                self.season = [season[0] for season in self.seasons if month in season[1]][0]
             self.year = int(start_parts[0])
 
         if end_tag:

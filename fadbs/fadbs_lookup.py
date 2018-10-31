@@ -25,11 +25,11 @@ creators_table = Table('anidb_anime_creators', Base.metadata,
                        Index('ix_anidb_anime_creators', 'anidb_id', 'creator_id'))
 Base.register_table(creators_table)
 
-#characters_table = Table('anidb_anime_characters', Base.metadata,
-#                         Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-#                         Column('character_id', Integer, ForeignKey('anidb_characters.id')),
-#                         Index('ix_anidb_anime_characters', 'anidb_id', 'character_id'))
-#Base.register_table(characters_table)
+# characters_table = Table('anidb_anime_characters', Base.metadata,
+#                          Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
+#                          Column('character_id', Integer, ForeignKey('anidb_characters.id')),
+#                          Index('ix_anidb_anime_characters', 'anidb_id', 'character_id'))
+# Base.register_table(characters_table)
 
 episodes_table = Table('anidb_anime_episodes', Base.metadata,
                        Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
@@ -69,7 +69,7 @@ class Anime(Base):
     permanent_rating = Column(Float)
     mean_rating = Column(Float)
     genres = relationship("AnimeGenreAssociation")
-    #characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
+    # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
     episodes = relation('AnimeEpisode', secondary=episodes_table, backref='series')
     year = Column(Integer)
     season = Column(String)
@@ -77,8 +77,13 @@ class Anime(Base):
     updated = Column(DateTime)
 
     @property
+    def title_main(self):
+        for title in self.titles:
+            if title.ep_type == 'main':
+                return title.name
+
+    @property
     def expired(self):
-        log.debug(type(self.updated))
         if self.updated is None:
             log.debug("updated is None: %s", self)
             return True
@@ -393,9 +398,11 @@ class FadbsLookup(object):
 
         log.debug('Parsed AniDB %s', anidb_id)
         series = Anime()
+        series.anidb_id = anidb_id
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes
         series.start_date = parser.dates['start']
+        series.year = parser.year
         # todo: make this better
         try:
             series.end_date = parser.dates['end']

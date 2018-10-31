@@ -1,10 +1,14 @@
 from __future__ import unicode_literals, division, absolute_import
 
+import difflib
 import logging
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 
 from flexget import plugin
 from flexget.event import event
+from flexget.utils.database import with_session
+
+from .fadbs_lookup import Anime, AnimeEpisode, AnimeTitle
 
 PLUGIN_ID = 'fadbs_est_release'
 
@@ -13,12 +17,45 @@ log = logging.getLogger(PLUGIN_ID)
 
 class EstimateSeriesAniDb(object):
     @plugin.priority(2)
-    def estimate(self, entry):
-        if not all(field in entry for field in ['series_name', 'series_season']):
-            log.debug('Failed first entry :(')
+    @with_session
+    def estimate(self, entry, session=None):
+        if not all(field in entry for field in ['series_name']):
+            log.debug('%s did not have the required attributes to search for the episode', entry['title'])
             return
-        for k in entry:
-            log.debug('%s: %s', k, entry[k])
+        pre_anime = session.query(Anime).join(Anime.titles).all()
+        titles_match = {}
+        for anime in pre_anime:
+            for title in anime.titles:
+                compar = difflib.SequenceMatcher(a=entry.get('series_name').lower(), b=title.name.lower()).ratio()
+                if compar >= 0.75:
+                    if anime.anidb_id not in titles_match:
+                        titles_match.update({anime.anidb_id: []})
+                    titles_match[anime.anidb_id].append((compar, title.name))
+        if not len(titles_match):
+            log.info('There were no title matches found "%s"', entry.get('series_name'))
+            return
+        log.trace('Titles with good matches: %s', titles_match)
+        best_anidb_id = (0, 0.0)
+        for k, v in titles_match.items():
+            for tup in v:
+                if tup[0] > best_anidb_id[1]:
+                    best_anidb_id = (k, tup[0])
+                if best_anidb_id[1] == 1.0:
+                    break
+            if best_anidb_id[1] == 1.0:
+                break
+        episode = entry.get('series_id')
+        anime = session.query(Anime).join(Anime.episodes).filter(Anime.anidb_id == best_anidb_id[0]).first()
+        if not anime:
+            return
+        for sode in anime.episodes:
+            try:
+                if int(sode.number) == episode:
+                    log.debug('Next airdate: %s', sode.airdate)
+                    return sode.airdate
+            except ValueError:
+                pass
+        return
 
 
 @event('plugin.register')
