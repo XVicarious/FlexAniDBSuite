@@ -47,7 +47,10 @@ class AnidbSearch(object):
         for anime in anime_objects:
             aid = anime['aid']
             for title in anime.find_all('title'):
-                title_string = self.cdata_regex.findall(title.string)[0]
+                title_string = self.cdata_regex.findall(title.string)
+                if not len(title_string):
+                    continue
+                title_string = title_string[0]
                 diff_ratio = difflib.SequenceMatcher(a=original_title.lower(), b=title_string.lower()).ratio()
                 if diff_ratio >= min_ratio:
                     log.debug('Title "%s" matches "%s" with %s similarity, which is above %s.',
