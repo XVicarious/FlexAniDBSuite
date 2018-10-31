@@ -8,7 +8,7 @@ from flexget import plugin
 from flexget.event import event
 from flexget.utils.database import with_session
 
-from .fadbs_lookup import Anime, AnimeEpisode, AnimeTitle
+from .fadbs_lookup import Anime
 
 PLUGIN_ID = 'fadbs_est_release'
 
@@ -19,6 +19,7 @@ class EstimateSeriesAniDb(object):
     @plugin.priority(2)
     @with_session
     def estimate(self, entry, session=None):
+        """ Estimate when the entry episode aired or will air """
         if not all(field in entry for field in ['series_name']):
             log.debug('%s did not have the required attributes to search for the episode', entry['title'])
             return
@@ -36,10 +37,10 @@ class EstimateSeriesAniDb(object):
             return
         log.trace('Titles with good matches: %s', titles_match)
         best_anidb_id = (0, 0.0)
-        for k, v in titles_match.items():
-            for tup in v:
-                if tup[0] > best_anidb_id[1]:
-                    best_anidb_id = (k, tup[0])
+        for key_anidb_id, val_ratio_name in titles_match.items():
+            for tuple_match in val_ratio_name:
+                if tuple_match[0] > best_anidb_id[1]:
+                    best_anidb_id = (key_anidb_id, tuple_match[0])
                 if best_anidb_id[1] == 1.0:
                     break
             if best_anidb_id[1] == 1.0:
