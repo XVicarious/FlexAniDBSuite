@@ -13,6 +13,8 @@ ANIDB_CACHE = '.anidb_cache'
 
 
 def cached_anidb(func):
+    """ Decorator for loading an AniDB entry from cache """
+
     anidb_anime_string = 'anime: %s'
 
     def __get_blake_name(anidb_cache_name):
@@ -28,7 +30,8 @@ def cached_anidb(func):
                 return soup
         return None
 
-    def return_cached(*args, **kwargs):
+    def decorator(*args, **kwargs):
+        """ Logic behind the decorator """
         anidb_id = args[0].anidb_id
         if anidb_id:
             log.trace('We have an anidb_id!')
@@ -46,4 +49,4 @@ def cached_anidb(func):
                         os.rename(cache_file, blake_path)
         func(*args, **kwargs)
 
-    return return_cached
+    return decorator
