@@ -246,7 +246,6 @@ class AnidbParser(object):
             log.debug('Not in cache. Looking up URL: %s', url)
             page = requests.get(url)
             page = page.text
-            page = open(page, 'r')
             # todo: move this to cached_anidb
             from flexget.manager import manager
             if 'blake2b' in hashlib.algorithms_available:
