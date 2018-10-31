@@ -273,23 +273,16 @@ class FadbsLookup(object):
     @plugin.internet(log)
     @with_session
     def lookup(self, entry, search_allowed=True, session=None):
-
-        from flexget import manager
-
         # Try to guarantee we have the AniDB id
         if entry.get('anidb_id', eval_lazy=False):
-            log.debug("One less request... adbid: %s", entry['anidb_id'])
-        elif entry.get('title', eval_lazy=False):
-            log.debug('We need to find that id, lets give it a search...')
-            searcher = AnidbSearch()
-            # todo: make this better
-            try:
-                entry['anidb_id'] = searcher.by_name_exact(entry['title'])
-            except TypeError:
-                return
-            # end
+            log.debug('The AniDB id is already there, and it is %s', entry['anidb_id'])
+        elif entry.get('series_name', eval_lazy=False) and search_allowed:
+            log.debug('No AniDB present, searching by series_name.')
+            entry['anidb_id'] = AnidbSearch().by_name_exact(entry['series_name'])
+            if not entry['anidb_id']:
+                raise plugin.PluginError('The series AniDB id was not found.')
         else:
-            raise plugin.PluginError("Oh no, we didn't do it :(")
+            raise plugin.PluginError('anidb_id and series_name were not present.')
 
         series = session.query(Anime).filter(Anime.anidb_id == entry['anidb_id']).first()
 
@@ -308,15 +301,13 @@ class FadbsLookup(object):
         try:
             series = self.__parse_new_series(entry['anidb_id'], session)
         except UnicodeDecodeError:
-            log.error('Unable to determine encoding for %s. Something something chardet', entry['anidb_id'])
+            log.error('Unable to determine encoding for %s. Try installing chardet', entry['anidb_id'])
             series = Anime()
             series.anidb_id = entry['anidb_id']
             session.add(series)
             session.commit()
             raise plugin.PluginError('Invalid parameter', log)
         except ValueError as err:
-            if manager.options.debug:
-                log.exception(err)
             raise plugin.PluginError('invalid parameter', log)
 
         # todo: trace log attributes?
@@ -387,6 +378,14 @@ class FadbsLookup(object):
             series.episodes.append(episode)
         return series
 
+    def __add_titles(self, series, titles, session):
+        for item in titles:
+            lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
+            if not lang:
+                lang = AnimeLangauge(item['lang'])
+            series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id))
+        return series
+
     def __parse_new_series(self, anidb_id, session):
 
         def __debug_parse(what):
@@ -397,6 +396,7 @@ class FadbsLookup(object):
         parser.parse()
 
         log.debug('Parsed AniDB %s', anidb_id)
+        log.debug('Populating the Anime')
         series = Anime()
         series.anidb_id = anidb_id
         series.series_type = parser.type
@@ -424,13 +424,12 @@ class FadbsLookup(object):
         series = self.__add_episodes(series, parser.episodes, session)
 
         __debug_parse('titles')
-        for item in parser.titles:
-            lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
-            if not lang:
-                lang = AnimeLangauge(item['lang'])
-            series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id))
+        series = self.__add_titles(series, parser.titles, session)
+
         series.updated = datetime.utcnow()
+
         session.add(series)
+
         return series
 
 
