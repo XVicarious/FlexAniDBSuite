@@ -1,2 +1,0 @@
-class CrazyDict(dict):
-    pass
