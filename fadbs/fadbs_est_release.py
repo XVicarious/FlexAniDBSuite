@@ -63,7 +63,6 @@ class EstimateSeriesAniDb(object):
                     return sode.airdate
             except ValueError:
                 pass
-        return
 
 
 @event('plugin.register')

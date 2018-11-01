@@ -307,7 +307,7 @@ class FadbsLookup(object):
             session.add(series)
             session.commit()
             raise plugin.PluginError('Invalid parameter', log)
-        except ValueError as err:
+        except ValueError:
             raise plugin.PluginError('invalid parameter', log)
 
         # todo: trace log attributes?
