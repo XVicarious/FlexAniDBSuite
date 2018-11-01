@@ -20,11 +20,12 @@ class FadbsSeriesNfo(object):
             {'type': 'object',
              'properties': {
                  'genre_weight': {'type': 'integer', 'default': 500},
-                 'spoilers': {'type': 'array', 'items': {'type': 'string', 'enum': ['local', 'global']}},
+                 'spoilers': {'type': 'array',
+                              'items': {'type': 'string', 'enum': ['local', 'global']}},
                  'title': {'type': 'object',
                            'properties': {
-                               'type': {'type': 'string', 'default': 'main',
-                                   'emum': ['main', 'official', 'synonym', 'short']},
+                               'type': {'type': 'string', 'default': 'main'},
+                               'emum': ['main', 'official', 'synonym', 'short'],
                                'lang': {'type': 'string', 'default': 'x-jat'}}}}}
         ]
     }
