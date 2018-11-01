@@ -7,8 +7,6 @@ AniDB is the premire data source for all things anime, largely thanks to it's de
 FADBS aims to enable as full of an automated workflow as possible with AniDB and your watching of anime. Use Flexget's `anidb_list` plugin to start yourself off.
 
 ### Planned Features
-* Find anime by name (with http://anisearch.outrance.pl)
-* Get anime metadata by AniDB's id for that anime
 * Add files to your mylist
 * Mediainfo plugin
 * CReq missing files on AniDB
@@ -22,3 +20,5 @@ FADBS aims to enable as full of an automated workflow as possible with AniDB and
 ### What Works
 * The `anidb_list` plugin included in the base Flexget package has an open pull request to fix it. This plugin, despite it's name is to fetch your wishlist
 * Fetch AniDB anime entry, and parse the information into an object with `fadbs_lookup`
+* Metadata by AniDB ID for anime
+* Find anime by name
