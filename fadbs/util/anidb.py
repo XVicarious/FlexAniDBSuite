@@ -1,14 +1,18 @@
 from __future__ import unicode_literals, division, absolute_import
 
-import logging
+import hashlib
+import os
+import re
+import difflib
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-
 from bs4 import Tag
+from flexget import logging
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
+from slugify import slugify
 
-from .anidb_cache import get_anidb_cache
+from .anidb_cache import cached_anidb, ANIDB_CACHE
 
 PLUGIN_ID = 'fadbs.util.anidb'
 
@@ -28,9 +32,32 @@ class AnidbSearch(object):
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime'
     prelook_url = 'http://anisearch.outrance.pl?task=search'
+    cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
+    particle_words = {
+        'x-jat': {
+            'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa'
+        }
+    }
 
     def __init__(self):
         self.debug = False
+
+    def __get_title_comparisons(self, original_title, anime_objects, min_ratio=0.5):
+        titles = []
+        for anime in anime_objects:
+            aid = anime['aid']
+            for title in anime.find_all('title'):
+                title_string = self.cdata_regex.findall(title.string)
+                if not len(title_string):
+                    continue
+                title_string = title_string[0]
+                diff_ratio = difflib.SequenceMatcher(a=original_title.lower(), b=title_string.lower()).ratio()
+                if diff_ratio >= min_ratio:
+                    log.debug('Title "%s" matches "%s" with %s similarity, which is above %s.',
+                              title_string, original_title, diff_ratio, min_ratio)
+                    titles.append([aid, diff_ratio, title_string])
+        log.verbose('Returning %s titles with at least %s similarity.', len(titles), min_ratio)
+        return titles
 
     def by_name_exact(self, anime_name):
         """
@@ -39,12 +66,21 @@ class AnidbSearch(object):
         :param anime_name: name of the anime
         :return: an anidb id, hopefully
         """
-        search_url = self.prelook_url + '&query="%s"' % anime_name
+        name_parts = slugify(anime_name).split('-')
+        name_parts = ['~' + part if part in self.particle_words['x-jat'] else part for part in name_parts]
+        anime_name_mod = ' '.join(name_parts)
+        search_url = self.prelook_url + "&query='%s'" % anime_name_mod
+        print(search_url)
         req = requests.get(search_url)
         if req.status_code != 200:
             raise Exception
         soup = get_soup(req.text)
-        return soup.find('anime')['aid']
+        matches = self.__get_title_comparisons(anime_name, soup.find_all('anime'))
+        matches.sort(key=lambda x: x[1], reverse=True)
+        if matches[0][1] > 1:
+            log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"',
+                        anime_name, matches[0][2])
+        return matches[0][0]
 
 
 class AnidbParser(object):
@@ -56,12 +92,12 @@ class AnidbParser(object):
 
     RESOURCE_MIN_CACHE = 24 * 60 * 60
 
-    seasons = [
-        'Winter',
-        'Spring',
-        'Summer',
-        'Fall'
-    ]
+    seasons = {
+        ('Winter', range(1, 4)),
+        ('Spring', range(4, 7)),
+        ('Summer', range(7, 10)),
+        ('Fall', range(10, 13))
+    }
 
     def __init__(self, anidb_id):
         self.anidb_id = anidb_id
@@ -173,31 +209,29 @@ class AnidbParser(object):
 
     @staticmethod
     def __parse_tiered_tag(contents, callback):
+        if contents is None:
+            log.warning('%s passed None to __parse_tiered_tag', callback.__name__)
+            return
         for item in contents.find_all(True, recursive=False):
             callback(item)
-
-    def __season(self, month):
-        # I feel this could be better?
-        if 1 <= month <= 3:
-            return self.seasons[0]
-        elif 4 <= month <= 6:
-            return self.seasons[1]
-        elif 7 <= month <= 9:
-            return self.seasons[2]
-        return self.seasons[3]
 
     def __set_dates(self, start_tag, end_tag):
         if start_tag:
             start_parts = start_tag.string.split('-')
             if len(start_parts) == 3:
                 self.dates['start'] = datetime.strptime(start_tag.string, self.DATE_FORMAT).date()
+            else:
+                self.dates['start'] = None
             if len(start_parts) >= 2:
-                self.season = self.__season(int(start_parts[1]))
+                month = int(start_parts[1])
+                self.season = [season[0] for season in self.seasons if month in season[1]][0]
             self.year = int(start_parts[0])
 
         if end_tag:
             if len(end_tag.string.split('-')) == 3:
                 self.dates['end'] = datetime.strptime(end_tag.string, self.DATE_FORMAT).date()
+            else:
+                self.dates['end'] = None
 
     def __set_sim_rel(self, similar_tag, related_tag):
         if similar_tag is not None:
@@ -206,15 +240,39 @@ class AnidbParser(object):
         if related_tag is not None:
             self.__parse_tiered_tag(related_tag, self.__append_related)
 
+    @cached_anidb
     def parse(self, soup=None):
-        url = self.anidb_xml_url % self.anidb_id
 
         if not soup:
-            request_url = url + "&client=%s&clientver=%s&protover=1" % (CLIENT_STR, CLIENT_VER)
-            page = get_anidb_cache(request_url)
-            print(request_url)
-            page = open(page, 'r')
+            pre_cache_name = ('anime: %s' % self.anidb_id).encode()
+            url = (self.anidb_xml_url + "&client=%s&clientver=%s&protover=1") % (self.anidb_id, CLIENT_STR, CLIENT_VER)
+            log.debug('Not in cache. Looking up URL: %s', url)
+            page = requests.get(url)
+            page = page.text
+            # todo: move this to cached_anidb
+            from flexget.manager import manager
+            if 'blake2b' in hashlib.algorithms_available:
+                blake = hashlib.new('blake2b')
+                blake.update(pre_cache_name)
+                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, blake.hexdigest())
+            else:
+                md5sum = hashlib.md5(pre_cache_name).hexdigest()
+                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, md5sum)
+            with open(cache_filename, 'w') as cache_file:
+                cache_file.write(page)
+                cache_file.close()
+                log.debug('%s cached.', self.anidb_id)
+            # end
+            if '500' in page:
+                page_copy = page.lower()
+                if 'banned' in page_copy:
+                    raise plugin.PluginError('Banned from AniDB...', log)
             soup = get_soup(page, parser="lxml")
+            page.close()
+            # We should really check if we're banned or what...
+            if not soup:
+                log.warning('Uh oh: %s', url)
+                return
 
         root = soup.find('anime')
 
@@ -241,7 +299,9 @@ class AnidbParser(object):
 
         self.__parse_tiered_tag(root.find('creators'), self.__append_creator)
 
-        self.description = root.find('description').string
+        tag_description = root.find('description')
+        if tag_description is not None:
+            self.description = tag_description.string
 
         ratings_tag = root.find('ratings')
         if ratings_tag is not None:
