@@ -263,6 +263,10 @@ class AnidbParser(object):
                 cache_file.close()
                 log.debug('%s cached.', self.anidb_id)
             # end
+            if '500' in page:
+                page_copy = page.lower()
+                if 'banned' in page_copy:
+                    raise plugin.PluginError('Banned from AniDB...', log)
             soup = get_soup(page, parser="lxml")
             page.close()
             # We should really check if we're banned or what...

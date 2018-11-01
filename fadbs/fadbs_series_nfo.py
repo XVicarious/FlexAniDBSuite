@@ -1,6 +1,7 @@
+import logging
 import os
 
-from flexget import plugin, logging
+from flexget import plugin
 from flexget.event import event
 from flexget.utils import template
 
@@ -18,12 +19,12 @@ class FadbsSeriesNfo(object):
             {'type': 'boolean', 'default': False},
             {'type': 'object',
              'properties': {
-                 'genre_weight': {'type': 'integer', 'default': -1},
+                 'genre_weight': {'type': 'integer', 'default': 500},
                  'spoilers': {'type': 'array', 'items': {'type': 'string', 'enum': ['local', 'global']}},
                  'title': {'type': 'object',
                            'properties': {
                                'type': {'type': 'string', 'default': 'main',
-                                        'emum': ['main', 'official', 'synonym', 'short']},
+                                   'emum': ['main', 'official', 'synonym', 'short']},
                                'lang': {'type': 'string', 'default': 'x-jat'}}}}}
         ]
     }
@@ -58,6 +59,9 @@ class FadbsSeriesNfo(object):
             entry_titles = entry.get('anidb_titles')
             if entry_titles:
                 entry['fadbs_nfo'].update(title=self.__main_title(config, entry_titles))
+            else:
+                log.warning('We were not given any titles, skipping...')
+                continue
             entry_tags = entry.get('anidb_tags')
             if entry_tags:
                 fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
