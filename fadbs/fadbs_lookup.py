@@ -87,7 +87,7 @@ class Anime(Base):
         if self.updated is None:
             log.debug("updated is None: %s", self)
             return True
-        tdelta = datetime.utcnow() - self.updated.astimezone()
+        tdelta = datetime.utcnow() - self.updated
         if tdelta.total_seconds() >= AnidbParser.RESOURCE_MIN_CACHE:
             return True
         log.info('This entry will expire in: %s seconds', AnidbParser.RESOURCE_MIN_CACHE - tdelta.total_seconds())
