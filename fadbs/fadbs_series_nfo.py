@@ -64,6 +64,8 @@ class FadbsSeriesNfo(object):
                 log.warning('We were not given any titles, skipping...')
                 continue
             entry_tags = entry.get('anidb_tags')
+            entry['fadbs_nfo']['genres'] = []
+            entry['fadbs_nfo']['tags'] = []
             if entry_tags:
                 fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
                 entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
@@ -84,8 +86,6 @@ class FadbsSeriesNfo(object):
                 # todo: remove an overridden genre
                 continue
             tags.append(info[0])
-        log.info('Genres: %s', genres)
-        log.info('Tags: %s', tags)
         return genres, tags
 
     @staticmethod
