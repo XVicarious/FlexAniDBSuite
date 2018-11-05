@@ -212,18 +212,24 @@ class FadbsLookup(object):
         return titles
 
     field_map = {
-        'anidb_titles': lambda series: FadbsLookup._title_dict(series),
+        'anidb_id': 'anidb_id',
         'anidb_type': 'series_type',
         'anidb_num_episodes': 'num_episodes',
-        'anidb_rating': 'permanent_rating',
-        'anidb_mean_rating': 'mean_rating',
-        'anidb_official_url': 'url',
         'anidb_startdate': 'start_date',
         'anidb_enddate': 'end_date',
+        'anidb_titles': lambda series: FadbsLookup._title_dict(series),
+        # todo: related anime
+        # todo: similar anime
+        'anidb_official_url': 'url',
+        # todo: creators
         'anidb_description': 'description',
+        'anidb_rating': 'permanent_rating',
+        'anidb_mean_rating': 'mean_rating',
         'anidb_tags': lambda series: dict(
             (genre.genre.anidb_id, [genre.genre.name, genre.genre_weight]) for genre in series.genres),
-        'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes)}
+        'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes),
+        'anidb_year': 'year',
+        'anidb_season': 'season'}
 
     # A tag id with True will remove that tag and all decedents, False just removes that tag
     default_tag_blacklist = {
