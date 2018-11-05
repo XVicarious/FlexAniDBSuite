@@ -8,6 +8,7 @@ from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
 from bs4 import Tag
 from flexget import logging
+from flexget import plugin
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 from slugify import slugify
@@ -52,6 +53,11 @@ class AnidbSearch(object):
                     continue
                 title_string = title_string[0]
                 diff_ratio = difflib.SequenceMatcher(a=original_title.lower(), b=title_string.lower()).ratio()
+                if diff_ratio == 1.0:
+                    log.debug('This is a perfect match, no need to do any more.')
+                    titles.clear()
+                    titles.append([aid, diff_ratio, title_string])
+                    return titles
                 if diff_ratio >= min_ratio:
                     log.debug('Title "%s" matches "%s" with %s similarity, which is above %s.',
                               title_string, original_title, diff_ratio, min_ratio)
@@ -268,7 +274,6 @@ class AnidbParser(object):
                 if 'banned' in page_copy:
                     raise plugin.PluginError('Banned from AniDB...', log)
             soup = get_soup(page, parser="lxml")
-            page.close()
             # We should really check if we're banned or what...
             if not soup:
                 log.warning('Uh oh: %s', url)
