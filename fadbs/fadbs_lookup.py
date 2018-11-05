@@ -101,7 +101,7 @@ class AnimeGenre(Base):
     __tablename__ = 'anidb_genres'
 
     id = Column(Integer, primary_key=True)
-    anidb_id = Column(Integer)
+    anidb_id = Column(Integer, unique=True)
     parent_id = Column(Integer, ForeignKey('anidb_genres.id'))
     name = Column(String)
 
@@ -363,8 +363,8 @@ class FadbsLookup(object):
                 if parent_genre:
                     genre.parent_id = parent_genre.id
                 else:
-                    log.warning("Genre %s parent genre, %s, is not in the database yet. " +
-                                "When it's found, it will be added", item['name'], item['parentid'])
+                    log.trace("Genre %s parent genre, %s, is not in the database yet. \
+                               When it's found, it will be added", item['name'], item['parentid'])
             series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
             series.genres.append(series_genre)
         return series
