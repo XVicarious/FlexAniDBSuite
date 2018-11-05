@@ -43,7 +43,7 @@ class AnidbSearch(object):
     def __init__(self):
         self.debug = False
 
-    def __get_title_comparisons(self, original_title, anime_objects, min_ratio=0.5):
+    def __get_title_comparisons(self, original_title, anime_objects, min_ratio=0.65):
         titles = []
         for anime in anime_objects:
             aid = anime['aid']
@@ -82,6 +82,8 @@ class AnidbSearch(object):
             raise Exception
         soup = get_soup(req.text)
         matches = self.__get_title_comparisons(anime_name, soup.find_all('anime'))
+        if not len(matches):
+            return None
         matches.sort(key=lambda x: x[1], reverse=True)
         if matches[0][1] > 1:
             log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"',
