@@ -1,11 +1,13 @@
 from __future__ import unicode_literals, division, absolute_import
 
+import gzip
 import hashlib
+from io import BytesIO
 import os
 import re
 import difflib
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import Tag
 from flexget import logging
 from flexget import plugin
@@ -33,6 +35,7 @@ class AnidbSearch(object):
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime'
     prelook_url = 'http://anisearch.outrance.pl?task=search'
+    anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
     particle_words = {
         'x-jat': {
@@ -65,6 +68,34 @@ class AnidbSearch(object):
         log.verbose('Returning %s titles with at least %s similarity.', len(titles), min_ratio)
         return titles
 
+    def __download_anidb_titles(self, cache_path):
+        anidb_titles = requests.get(self.anidb_title_dump_url)
+        if anidb_titles.status_code >= 400:
+            raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
+        with open(cache_path, 'w') as xml_file:
+            xml_file.write(anidb_titles.text)
+            xml_file.close()
+
+    def by_name(self, anime_name, match_ratio=0.9):
+        from flexget.manager import manager
+        cache_path = os.path.join('/home/xvicarious/PyProjects/FlexAniDBSuite', 'anidb-titles.xml')
+        cache_expired = True
+        cache_exists = os.path.exists(cache_path)
+        if not cache_exists or abs(datetime.now() - datetime.fromtimestamp(os.path.getctime(cache_path))) > timedelta(1):
+            self.__download_anidb_titles(cache_path)
+        soup = get_soup(open(cache_path), parser='lxml')
+        animes = soup.find_all('anime')
+        matcher = difflib.SequenceMatcher(a=anime_name)
+        for anime in animes:
+            titles = anime.find_all('title')
+            for title in titles:
+                matcher.set_seq2(title.string)
+                if matcher.ratio() > match_ratio:
+                    log.debug('Found anime: %s', title.string)
+                    return anime['aid']
+                log.debug('Match not close enough.')
+                log.trace('%s: %s does not match %s close enough.', anime['aid'], title.string, anime_name) 
+            
     def by_name_exact(self, anime_name):
         """
         Search for an anime by exact name, not terribly friendly right now
