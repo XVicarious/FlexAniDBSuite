@@ -286,12 +286,12 @@ class FadbsLookup(object):
             log.debug('The AniDB id is already there, and it is %s', entry['anidb_id'])
         elif entry.get('series_name', eval_lazy=False) and search_allowed:
             log.debug('No AniDB present, searching by series_name.')
-            entry['anidb_id'] = AnidbSearch().by_name_exact(entry['series_name'])
+            entry['anidb_id'] = AnidbSearch().by_name(entry['series_name'])
             if not entry['anidb_id']:
                 raise plugin.PluginError('The series AniDB id was not found.')
         elif entry_title and entry_title_extension != '.mkv' and entry_title_extension != '.mp4':
             log.debug('No AniDB id, no series_name... Attempting title (not promising anything)')
-            entry['anidb_id'] = AnidbSearch().by_name_exact(entry['title'])
+            entry['anidb_id'] = AnidbSearch().by_name(entry['title'])
             if not entry['anidb_id']:
                 raise plugin.PluginError('The series AniDB id was not found :(.')
         else:
