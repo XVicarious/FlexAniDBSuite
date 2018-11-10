@@ -1,8 +1,6 @@
 from __future__ import unicode_literals, division, absolute_import
 
-import gzip
 import hashlib
-from io import BytesIO
 import os
 import re
 import difflib
@@ -94,8 +92,8 @@ class AnidbSearch(object):
                     log.debug('Found anime: %s', title.string)
                     return anime['aid']
                 log.debug('Match not close enough.')
-                log.trace('%s: %s does not match %s close enough.', anime['aid'], title.string, anime_name) 
-            
+                log.trace('%s: %s does not match %s close enough.', anime['aid'], title.string, anime_name)
+
     def by_name_exact(self, anime_name):
         """
         Search for an anime by exact name, not terribly friendly right now
