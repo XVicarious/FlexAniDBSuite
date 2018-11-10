@@ -2,200 +2,20 @@ from __future__ import unicode_literals, division, absolute_import
 
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-
-from flexget import db_schema, plugin
-from flexget import logging
-from flexget.db_schema import UpgradeImpossible
+import logging
 from flexget.event import event
+from flexget import plugin
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
-from sqlalchemy import Table, Column, Integer, Float, String, Unicode, DateTime, Text, Date
-from sqlalchemy.orm import relation, relationship
-from sqlalchemy.schema import ForeignKey, Index
 
+from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation 
+from .util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
 from .util import AnidbParser, AnidbSearch
 
-SCHEMA_VER = 1
-
-Base = db_schema.versioned_base('fadbs_lookup', SCHEMA_VER)
-
-creators_table = Table('anidb_anime_creators', Base.metadata,
-                       Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-                       Column('creator_id', Integer, ForeignKey('anidb_creators.id')),
-                       Index('ix_anidb_anime_creators', 'anidb_id', 'creator_id'))
-Base.register_table(creators_table)
-
-# characters_table = Table('anidb_anime_characters', Base.metadata,
-#                          Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-#                          Column('character_id', Integer, ForeignKey('anidb_characters.id')),
-#                          Index('ix_anidb_anime_characters', 'anidb_id', 'character_id'))
-# Base.register_table(characters_table)
-
-episodes_table = Table('anidb_anime_episodes', Base.metadata,
-                       Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-                       Column('episode_id', Integer, ForeignKey('anidb_episodes.id')),
-                       Index('ix_anidb_anime_episodes', 'anidb_id', 'episode_id'))
-Base.register_table(episodes_table)
 
 PLUGIN_ID = 'fadbs_lookup'
 
 log = logging.getLogger(PLUGIN_ID)
-
-
-class AnimeGenreAssociation(Base):
-    __tablename__ = 'anidb_genreassociation'
-
-    anidb_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
-    genre_id = Column(Integer, ForeignKey('anidb_genres.id'), primary_key=True)
-    genre_weight = Column(Integer)
-    genre = relationship("AnimeGenre")
-
-
-class Anime(Base):
-    __tablename__ = 'anidb_series'
-
-    id = Column(Integer, primary_key=True)
-    anidb_id = Column(Integer)
-    series_type = Column(Unicode)
-    num_episodes = Column(Integer)
-    start_date = Column(Date)
-    end_date = Column(Date)
-    titles = relation("AnimeTitle")
-    # todo: related anime, many to many?
-    # todo: similar anime, many to many?
-    url = Column(String)
-    creators = relation("AnimeCreator", secondary=creators_table, backref='series')
-    description = Column(Text)
-    permanent_rating = Column(Float)
-    mean_rating = Column(Float)
-    genres = relationship("AnimeGenreAssociation")
-    # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
-    episodes = relation('AnimeEpisode', secondary=episodes_table, backref='series')
-    year = Column(Integer)
-    season = Column(String)
-
-    updated = Column(DateTime)
-
-    @property
-    def title_main(self):
-        for title in self.titles:
-            if title.ep_type == 'main':
-                return title.name
-
-    @property
-    def expired(self):
-        if self.updated is None:
-            log.debug("updated is None: %s", self)
-            return True
-        tdelta = datetime.utcnow() - self.updated
-        if tdelta.total_seconds() >= AnidbParser.RESOURCE_MIN_CACHE:
-            return True
-        log.info('This entry will expire in: %s seconds', AnidbParser.RESOURCE_MIN_CACHE - tdelta.total_seconds())
-        return False
-
-    def __repr__(self):
-        return '<Anime(name=%s,type=%s,year=%s)>' % (self.titles, self.series_type, 0)
-
-
-class AnimeGenre(Base):
-    __tablename__ = 'anidb_genres'
-
-    id = Column(Integer, primary_key=True)
-    anidb_id = Column(Integer, unique=True)
-    parent_id = Column(Integer, ForeignKey('anidb_genres.id'))
-    name = Column(String)
-
-    def __init__(self, anidb_id, name):
-        self.anidb_id = anidb_id
-        self.name = name
-        self.parent_id = None
-
-
-class AnimeCreator(Base):
-    __tablename__ = 'anidb_creators'
-
-    id = Column(Integer, primary_key=True)
-    anidb_id = Column(Integer)
-    creator_type = Column(Unicode)
-    name = Column(Unicode)
-
-    def __init__(self, anidb_id, creator_type, name):
-        self.anidb_id = anidb_id
-        self.creator_type = creator_type
-        self.name = name
-
-
-class AnimeTitle(Base):
-    __tablename__ = 'anidb_titles'
-
-    id = Column(Integer, primary_key=True)
-    parent_id = Column(Integer, ForeignKey('anidb_series.id'))
-    name = Column(Unicode)
-    language = Column(Unicode, ForeignKey('anidb_languages.name'))
-    ep_type = Column(Unicode)
-
-    def __init__(self, name, language, ep_type, parent):
-        self.name = name
-        self.language = language
-        self.ep_type = ep_type
-        self.parent_id = parent
-
-
-class AnimeLangauge(Base):
-    __tablename__ = 'anidb_languages'
-
-    id = Column(Integer, primary_key=True)
-    name = Column(Unicode)
-
-    def __init__(self, language):
-        self.name = language
-
-
-class AnimeEpisode(Base):
-    __tablename__ = 'anidb_episodes'
-
-    id = Column(Integer, primary_key=True)
-    anidb_id = Column(Integer)
-    parent_id = Column(Integer, ForeignKey('anidb_series.id'))
-    number = Column(Unicode)
-    ep_type = Column(String)
-    length = Column(Integer)
-    airdate = Column(Date)
-    rating = Column(Float)
-    votes = Column(Integer)
-    titles = relation('AnimeEpisodeTitle')
-
-    def __init__(self, anidb_id, number, length, airdate, rating, parent):
-        self.anidb_id = anidb_id
-        self.number = number[0]
-        self.ep_type = number[1]
-        self.length = length
-        self.airdate = airdate
-        self.rating = rating[0]
-        self.votes = rating[1]
-        self.parent_id = parent
-
-
-class AnimeEpisodeTitle(Base):
-    __tablename__ = 'anidb_episodetitles'
-
-    id = Column(Integer, primary_key=True)
-    parent_id = Column(Integer, ForeignKey('anidb_episodes.id'))
-    title = Column(Unicode)
-    language = Column(Unicode, ForeignKey('anidb_languages.name'))
-
-    def __init__(self, parent_id, title, langauge):
-        self.parent_id = parent_id
-        self.title = title
-        self.language = langauge
-
-
-@db_schema.upgrade('fadbs_lookup')
-def upgrade(ver, session):
-    if ver is None:
-        raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.' % PLUGIN_ID)
-    return ver
-
 
 class FadbsLookup(object):
 
