@@ -76,10 +76,10 @@ class AnidbSearch(object):
 
     def by_name(self, anime_name, match_ratio=0.9):
         from flexget.manager import manager
-        cache_path = os.path.join('/home/xvicarious/PyProjects/FlexAniDBSuite', 'anidb-titles.xml')
-        cache_expired = True
+        cache_path = os.path.join(manager.config_base, 'anidb-titles.xml')
         cache_exists = os.path.exists(cache_path)
-        if not cache_exists or abs(datetime.now() - datetime.fromtimestamp(os.path.getctime(cache_path))) > timedelta(1):
+        cache_mtime = datetime.fromtimestamp(os.path.getmtime(cache_path))
+        if not cache_exists or abs(datetime.now() - cache_mtime) > timedelta(1):
             self.__download_anidb_titles(cache_path)
         soup = get_soup(open(cache_path), parser='lxml')
         animes = soup.find_all('anime')
@@ -93,31 +93,6 @@ class AnidbSearch(object):
                     return anime['aid']
                 log.debug('Match not close enough.')
                 log.trace('%s: %s does not match %s close enough.', anime['aid'], title.string, anime_name)
-
-    def by_name_exact(self, anime_name):
-        """
-        Search for an anime by exact name, not terribly friendly right now
-
-        :param anime_name: name of the anime
-        :return: an anidb id, hopefully
-        """
-        name_parts = slugify(anime_name).split('-')
-        name_parts = ['~' + part if part in self.particle_words['x-jat'] else part for part in name_parts]
-        anime_name_mod = ' '.join(name_parts)
-        search_url = self.prelook_url + "&query='%s'" % anime_name_mod
-        print(search_url)
-        req = requests.get(search_url)
-        if req.status_code != 200:
-            raise Exception
-        soup = get_soup(req.text)
-        matches = self.__get_title_comparisons(anime_name, soup.find_all('anime'))
-        if not len(matches):
-            return None
-        matches.sort(key=lambda x: x[1], reverse=True)
-        if matches[0][1] > 1:
-            log.warning('Results for "%s" did not return an exact match. Choosing best match, "%s"',
-                        anime_name, matches[0][2])
-        return matches[0][0]
 
 
 class AnidbParser(object):
