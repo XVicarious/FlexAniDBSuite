@@ -8,7 +8,7 @@ from flexget import plugin
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
-from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation 
+from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
 from .util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
 from .util import AnidbParser, AnidbSearch
 
