@@ -1,3 +1,4 @@
+""" AniDB Database Table Things """
 from __future__ import unicode_literals, division, absolute_import
 import logging
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
@@ -73,12 +74,14 @@ class Anime(Base):
 
     @property
     def title_main(self):
+        """ Title Considered the "Main" Title on AniDB """
         for title in self.titles:
             if title.ep_type == 'main':
                 return title.name
 
     @property
     def expired(self):
+        """ AniDB Allows us to grab an entry once every 24 hours, lets stick to that """
         if self.updated is None:
             log.debug("updated is None: %s", self)
             return True
@@ -127,6 +130,7 @@ class AnimeGenre(Base):
 
 
 class AnimeCreatorAssociation(Base):
+    """ Connecting creators to Anime and their jobs """
     __tablename__ = 'anidb_creatorassociation'
 
     series_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
@@ -153,6 +157,7 @@ class AnimeCreator(Base):
 
 
 class AnimeCharacter(Base):
+    """ Characters in Anime """
     __tablename__ = 'anidb_characters'
 
     id = Column(Integer, primary_key=True)
@@ -171,6 +176,7 @@ class AnimeCharacter(Base):
 
 
 class AnimeTitle(Base):
+    """ Titles of Anime """
     __tablename__ = 'anidb_titles'
 
     id = Column(Integer, primary_key=True)
@@ -187,6 +193,7 @@ class AnimeTitle(Base):
 
 
 class AnimeLangauge(Base):
+    """ Language names for anime (ex: jp, en, x-jat) """
     __tablename__ = 'anidb_languages'
 
     id = Column(Integer, primary_key=True)
@@ -197,6 +204,7 @@ class AnimeLangauge(Base):
 
 
 class AnimeEpisode(Base):
+    """ Individual episodes of an anime """
     __tablename__ = 'anidb_episodes'
 
     id = Column(Integer, primary_key=True)
@@ -222,6 +230,7 @@ class AnimeEpisode(Base):
 
 
 class AnimeEpisodeTitle(Base):
+    """ Titles for Individual anime episodes """
     __tablename__ = 'anidb_episodetitles'
 
     id = Column(Integer, primary_key=True)
@@ -237,6 +246,7 @@ class AnimeEpisodeTitle(Base):
 
 @db_schema.upgrade('api_anidb')
 def upgrade(ver, session):
+    """ Upgrade the database when something has changed """
     if ver is None:
         raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.' % PLUGIN_ID)
     return ver
