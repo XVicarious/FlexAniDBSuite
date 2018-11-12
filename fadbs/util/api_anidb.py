@@ -7,8 +7,8 @@ from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 from flexget import db_schema
 from datetime import datetime
-from .anidb import AnidbParser
 from flexget.db_schema import UpgradeImpossible
+from .anidb_parse import AnidbParser
 
 
 SCHEMA_VER = 1
