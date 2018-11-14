@@ -35,6 +35,7 @@ class FadbsLookup(object):
 
     field_map = {
         'anidb_id': 'anidb_id',
+        'anidb_title_main': lambda series: series.title_main,
         'anidb_type': 'series_type',
         'anidb_num_episodes': 'num_episodes',
         'anidb_startdate': 'start_date',
@@ -111,13 +112,13 @@ class FadbsLookup(object):
             entry['anidb_id'] = AnidbSearch().by_name(entry['series_name'])
             if not entry['anidb_id']:
                 raise plugin.PluginError('The series AniDB id was not found.')
-        elif entry_title and entry_title_extension != '.mkv' and entry_title_extension != '.mp4':
-            log.debug('No AniDB id, no series_name... Attempting title (not promising anything)')
-            entry['anidb_id'] = AnidbSearch().by_name(entry['title'])
-            if not entry['anidb_id']:
-                raise plugin.PluginError('The series AniDB id was not found :(.')
+        #elif entry_title and entry_title_extension != '.mkv' and entry_title_extension != '.mp4':
+        #    log.debug('No AniDB id, no series_name... Attempting title (not promising anything)')
+        #    entry['anidb_id'] = AnidbSearch().by_name(entry['title'])
+        #    if not entry['anidb_id']:
+        #        raise plugin.PluginError('The series AniDB id was not found :(.')
         else:
-            raise plugin.PluginError('anidb_id and series_name were not present.')
+            raise plugin.PluginError('anidb_id and series_name were not present for %s.' % entry_title)
 
         series = session.query(Anime).filter(Anime.anidb_id == entry['anidb_id']).first()
 
