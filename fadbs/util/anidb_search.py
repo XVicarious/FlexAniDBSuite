@@ -11,6 +11,7 @@ from flexget import logging, plugin
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
+from sqlalchemy import orm
 
 from .api_anidb import Anime, AnimeTitle, AnimeLangauge
 
@@ -46,9 +47,16 @@ class AnidbSearch(object):
     def __load_xml_to_database(self, cache_path, session=None):
         with open(cache_path, 'r') as anidb_dump:
             soup = get_soup(anidb_dump, parser='lxml')
+            assert isinstance(session, orm.Session)
+            last = session.query(Anime).order_by(Anime.anidb_id.desc()).first()
+            if last:
+                last = last.anidb_id
             animes = soup.find_all('anime')
             for anime in animes:
                 anidb_id = int(anime['aid'])
+                if int(last) == anidb_id:
+                    log.trace('%s exists in the DB, skipping', anidb_id)
+                    continue
                 series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
                 if not series:
                     log.debug('The anime is not in the database, adding it')
@@ -73,14 +81,14 @@ class AnidbSearch(object):
             session.commit()
 
     def __download_anidb_titles(self, cache_path):
-        anidb_titles = requests.get(self.anidb_title_dump_url)
-        if anidb_titles.status_code >= 400:
-            raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
-        if os.path.exists(cache_path):
-            os.rename(cache_path, cache_path + '.old')
-        with open(cache_path, 'w') as xml_file:
-            xml_file.write(anidb_titles.text)
-            xml_file.close()
+        #anidb_titles = requests.get(self.anidb_title_dump_url)
+        #if anidb_titles.status_code >= 400:
+        #    raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
+        #if os.path.exists(cache_path):
+        #    os.rename(cache_path, cache_path + '.old')
+        #with open(cache_path, 'w') as xml_file:
+        #    xml_file.write(anidb_titles.text)
+        #    xml_file.close()
         self.__load_xml_to_database(cache_path)
 
     def by_name(self, anime_name, match_ratio=0.9):
