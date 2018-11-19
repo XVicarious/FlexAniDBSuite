@@ -9,7 +9,7 @@ from flexget import db_schema
 from datetime import datetime
 from flexget.db_schema import UpgradeImpossible
 from .anidb_parse import AnidbParser
-
+from flexget.utils.database import with_session
 
 SCHEMA_VER = 1
 
@@ -250,3 +250,12 @@ def upgrade(ver, session):
     if ver is None:
         raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.' % PLUGIN_ID)
     return ver
+
+
+@with_session
+def lookup_series(name=None, anidb_id=None, only_cached=False, session=None):
+
+    if anidb_id:
+        series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
+    if not series and name:
+        return
