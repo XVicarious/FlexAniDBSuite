@@ -54,6 +54,18 @@ class FadbsLookup(object):
         'anidb_year': 'year',
         'anidb_season': 'season'}
 
+    # todo: implement UDP api to get more info
+    # UDP gives us more episode information, I think
+    # who knows. They've had 15 years to develop this api
+    # and it still doesn't include a ton of things
+    episode_map = {
+            'anidb_episode_id': 'anidb_id',
+            'anidb_episode_number': 'number',
+            'anidb_episode_type': 'ep_type',
+            'anidb_episode_airdate': 'airdate',
+            'anidb_episode_rating': 'rating',
+            'anidb_episode_votes': 'votes'}
+
     # A tag id with True will remove that tag and all decedents, False just removes that tag
     default_tag_blacklist = {
         -1: True,
@@ -85,6 +97,15 @@ class FadbsLookup(object):
         for entry in task.entries:
             log.debug('Looking up: %s', entry.get('title'))
             self.register_lazy_fields(entry)
+
+    @plugin.priority(130)
+    def on_task_metainfo2(self, task, config):
+        if not config:
+            return
+        for entry in task.entries:
+            if entry.get(series_name) or entry.get('anidb_id', eval_lazy=False):
+                # todo: thinking of using "in_" for this.
+                pass
 
     def register_lazy_fields(self, entry):
         entry.register_lazy_func(self.lazy_loader, self.field_map)
@@ -182,32 +203,34 @@ class FadbsLookup(object):
         genres = self.__remove_blacklist(genres)
         genres_list = sorted(genres, key=lambda k: k['parentid'])
         for item in genres_list:
-            genre = self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['id']).first()
+            genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['id']).first()
             if not genre:
                 log.debug('%s is not in the genre list, adding', item['name'])
                 genre = AnimeGenre(item['id'], item['name'])
             if genre.parent_id is None and item['parentid']:
-                parent_genre = \
-                    self.__query_and_filter(session, AnimeGenre, AnimeGenre.anidb_id == item['parentid']).first()
+                parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
                 if parent_genre:
                     genre.parent_id = parent_genre.id
                 else:
                     log.trace("Genre %s parent genre, %s, is not in the database yet. \
                                When it's found, it will be added", item['name'], item['parentid'])
-            series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
-            series.genres.append(series_genre)
+            series_genre = session.query(AnimeGenreAssociation).filter(AnimeGenreAssociation.anidb_id == series.id, AnimeGenreAssociation.genre_id == genre.id).first()
+            if not series_genre:
+                series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
+                series.genres.append(series_genre)
+            if series_genre.genre_weight != item['weight']:
+                series_genre.genre_weight = item['weight']
         return series
 
     def __add_episodes(self, series, episodes, session):
         for item in episodes:
-            episode = self.__query_and_filter(session, AnimeEpisode, AnimeEpisode.anidb_id == item['id']).first()
+            episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
                 rating = [item['rating'], item['votes']]
                 number = [item['episode_number'], item['episode_type']]
                 episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
                 for item_title in item['titles']:
-                    lang = self.__query_and_filter(session, AnimeLangauge,
-                                                   AnimeLangauge.name == item_title['lang']).first()
+                    lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
                     if not lang:
                         lang = AnimeLangauge(item_title['lang'])
                     episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
@@ -233,8 +256,10 @@ class FadbsLookup(object):
 
         log.debug('Parsed AniDB %s', anidb_id)
         log.debug('Populating the Anime')
-        series = Anime()
-        series.anidb_id = anidb_id
+        series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
+        if not series:
+            series = Anime()
+            series.anidb_id = anidb_id
         series.series_type = parser.type
         series.num_episodes = parser.num_episodes
         series.start_date = parser.dates['start']
