@@ -1,11 +1,12 @@
 from __future__ import unicode_literals, division, absolute_import
 
 import hashlib
+import logging
 import os
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
+
 from bs4 import Tag
-from flexget import logging
 from flexget import plugin
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
@@ -26,7 +27,7 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '2 seconds'))
 
 
 class AnidbParser(object):
-    """ Fetch and parse an AniDB API entry """
+    """Fetch and parse an AniDB API entry."""
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime&aid=%s'
 
@@ -60,20 +61,20 @@ class AnidbParser(object):
         self.season = None
 
     def __str__(self):
-        return '<AnidbParser (name=%s, anidb_id=%s)>' % ('WIP', self.anidb_id)
+        return '<AnidbParser (name=%s, anidb_id=%s)>'.format('WIP', self.anidb_id)
 
     def __append_title(self, title):
         self.titles.append({
             'name': title.string,
             'lang': title['xml:lang'],
-            'type': title['type']
+            'type': title['type'],
         })
 
     def __append_related(self, related):
         self.related_anime.append({
             'id': int(related['id']),
             'type': related['type'],
-            'name': related.string
+            'name': related.string,
         })
 
     def __append_similar(self, similar):
@@ -81,14 +82,14 @@ class AnidbParser(object):
             'id': int(similar['id']),
             'approval': similar['approval'],
             'total': similar['total'],
-            'name': similar.string
+            'name': similar.string,
         })
 
     def __append_creator(self, creator):
         self.creators.append({
             'id': int(creator['id']),
             'type': creator['type'],
-            'name': creator.string
+            'name': creator.string,
         })
 
     def __append_genre(self, tag):
@@ -99,7 +100,7 @@ class AnidbParser(object):
             'weight': int(tag['weight']),
             'localspoiler': bool(tag['localspoiler']),
             'globalspoiler': bool(tag['globalspoiler']),
-            'verified': bool(tag['verified'])
+            'verified': bool(tag['verified']),
         })
 
     def __append_character(self, character):
@@ -209,7 +210,7 @@ class AnidbParser(object):
                 page_copy = page.lower()
                 if 'banned' in page_copy:
                     raise plugin.PluginError('Banned from AniDB...', log)
-            soup = get_soup(page, parser="lxml")
+            soup = get_soup(page, parser='lxml-xml')
             # We should really check if we're banned or what...
             if not soup:
                 log.warning('Uh oh: %s', url)

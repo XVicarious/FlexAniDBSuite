@@ -1,15 +1,18 @@
-""" AniDB Database Table Things """
+"""AniDB Database Table Things."""
 from __future__ import unicode_literals, division, absolute_import
-import logging
+
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
+from datetime import datetime
+import logging
 from sqlalchemy import Table, Column, Integer, Float, String, Unicode, DateTime, Text, Date
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
+
 from flexget import db_schema
-from datetime import datetime
 from flexget.db_schema import UpgradeImpossible
-from .anidb_parse import AnidbParser
 from flexget.utils.database import with_session
+
+from .anidb_parse import AnidbParser
 
 SCHEMA_VER = 1
 
@@ -23,20 +26,6 @@ def _table_master(table_name, index_table_name, left_id, right_id):
                  Index(index_table_name, left_id[0], right_id[0]))
 
 
-#creators_table = _table_master('anidb_anime_creators', 'ix_anidb_anime_creators',
-#                               ['anidb_series_id', 'anidb_series.id'], ['creator_id', 'anidb_creators.id'])
-#Base.register_table(creators_table)
-#
-#creator_job_table = _table_master('anidb_creator_jobs', 'ix_anidb_creator_jobs',
-#                                  ['creator_id', 'anidb_creators.id'], ['job_id', 'anidb_genres.id'])
-#Base.register_table(creator_job_table)
-
-# characters_table = Table('anidb_anime_characters', Base.metadata,
-#                          Column('anidb_id', Integer, ForeignKey('anidb_series.id')),
-#                          Column('character_id', Integer, ForeignKey('anidb_characters.id')),
-#                          Index('ix_anidb_anime_characters', 'anidb_id', 'character_id'))
-# Base.register_table(characters_table)
-
 episodes_table = _table_master('anidb_anime_episodes', 'ix_anidb_anime_episodes',
                                ['anidb_series_id', 'anidb_series.id'], ['episode_id', 'anidb_episodes.id'])
 Base.register_table(episodes_table)
@@ -47,16 +36,17 @@ log = logging.getLogger(PLUGIN_ID)
 
 
 class Anime(Base):
-    """ Define an Anime from AniDB """
+    """Define an Anime from AniDB."""
+
     __tablename__ = 'anidb_series'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
     series_type = Column(Unicode)
     num_episodes = Column(Integer)
     start_date = Column(Date)
     end_date = Column(Date)
-    titles = relation("AnimeTitle")
+    titles = relation('AnimeTitle')
     # todo: related = relationship('AnimeRelatedAssociation')
     # todo: similar anime, many to many?
     url = Column(String)
@@ -74,16 +64,16 @@ class Anime(Base):
 
     @property
     def title_main(self):
-        """ Title Considered the "Main" Title on AniDB """
+        """Title Considered the "Main" Title on AniDB."""
         for title in self.titles:
             if title.ep_type == 'main':
                 return title.name
 
     @property
     def expired(self):
-        """ AniDB Allows us to grab an entry once every 24 hours, lets stick to that """
+        """AniDB allows us to grab an entry once every 24 hours, lets stick to that."""
         if self.updated is None:
-            log.debug("updated is None: %s", self)
+            log.debug('updated is None: %s', self)
             return True
         tdelta = datetime.utcnow() - self.updated
         if tdelta.total_seconds() >= AnidbParser.RESOURCE_MIN_CACHE:
@@ -92,33 +82,26 @@ class Anime(Base):
         return False
 
     def __repr__(self):
-        return '<Anime(name=%s,type=%s,year=%s)>' % (self.title_main, self.series_type, 0)
+        return '<Anime(name=%s,type=%s,year=%s)>'.format(self.title_main, self.series_type, 0)
 
 
 class AnimeGenreAssociation(Base):
-    """ Information pertaining to genres to specific series """
+    """Information pertaining to genres to specific series."""
+
     __tablename__ = 'anidb_genreassociation'
 
     anidb_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
     genre_id = Column(Integer, ForeignKey('anidb_genres.id'), primary_key=True)
     genre_weight = Column(Integer)
-    genre = relationship("AnimeGenre")
-
-
-#class AnimeRelatedAssociation(Base):
-#    """ Information pertaining to related anime """
-#    __tablename__ = 'anidb_animerelatedassociation'
-#
-#    from_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
-#    to_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
-#    relation_type = Column(Unicode)
+    genre = relationship('AnimeGenre')
 
 
 class AnimeGenre(Base):
-    """ Define a Genre/Tag from AniDB """
+    """Define a Genre/Tag from AniDB."""
+
     __tablename__ = 'anidb_genres'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
     parent_id = Column(Integer, ForeignKey('anidb_genres.id'))
     name = Column(String)
@@ -130,7 +113,8 @@ class AnimeGenre(Base):
 
 
 class AnimeCreatorAssociation(Base):
-    """ Connecting creators to Anime and their jobs """
+    """Connecting creators to Anime and their jobs."""
+
     __tablename__ = 'anidb_creatorassociation'
 
     series_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
@@ -140,10 +124,11 @@ class AnimeCreatorAssociation(Base):
 
 
 class AnimeCreator(Base):
-    """ Creators, includes writers, original authors, and seiyuus """
+    """Creators, includes writers, original authors, and seiyuus."""
+
     __tablename__ = 'anidb_creators'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
     anime_association = relationship('AnimeCreatorAssociation')
     # todo: actual "type", UDP api "type" 1='person', 2='company', 3='collaboration'
@@ -157,10 +142,11 @@ class AnimeCreator(Base):
 
 
 class AnimeCharacter(Base):
-    """ Characters in Anime """
+    """Characters in Anime."""
+
     __tablename__ = 'anidb_characters'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
     jp_name = Column(Unicode)
     main_name = Column(Unicode)
@@ -176,10 +162,11 @@ class AnimeCharacter(Base):
 
 
 class AnimeTitle(Base):
-    """ Titles of Anime """
+    """Titles of Anime."""
+
     __tablename__ = 'anidb_titles'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('anidb_series.id'))
     name = Column(Unicode)
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
@@ -193,10 +180,11 @@ class AnimeTitle(Base):
 
 
 class AnimeLangauge(Base):
-    """ Language names for anime (ex: jp, en, x-jat) """
+    """Language names for anime (ex: jp, en, x-jat)."""
+
     __tablename__ = 'anidb_languages'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     name = Column(Unicode)
 
     def __init__(self, language):
@@ -204,10 +192,11 @@ class AnimeLangauge(Base):
 
 
 class AnimeEpisode(Base):
-    """ Individual episodes of an anime """
+    """Individual episodes of an Anime."""
+
     __tablename__ = 'anidb_episodes'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
     parent_id = Column(Integer, ForeignKey('anidb_series.id'))
     number = Column(Unicode)
@@ -230,10 +219,11 @@ class AnimeEpisode(Base):
 
 
 class AnimeEpisodeTitle(Base):
-    """ Titles for Individual anime episodes """
+    """Titles for individual Anime episodes."""
+
     __tablename__ = 'anidb_episodetitles'
 
-    id = Column(Integer, primary_key=True)
+    id_ = Column('id', Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('anidb_episodes.id'))
     title = Column(Unicode)
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
@@ -246,9 +236,9 @@ class AnimeEpisodeTitle(Base):
 
 @db_schema.upgrade('api_anidb')
 def upgrade(ver, session):
-    """ Upgrade the database when something has changed """
+    """Upgrade the database when something has changed."""
     if ver is None:
-        raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.' % PLUGIN_ID)
+        raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.'.format(PLUGIN_ID))
     return ver
 
 

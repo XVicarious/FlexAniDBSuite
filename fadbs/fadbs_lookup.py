@@ -3,15 +3,15 @@ from __future__ import unicode_literals, division, absolute_import
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
 import logging
-from flexget.event import event
+
 from flexget import plugin
+from flexget.event import event
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
 from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
 from .util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
 from .util import AnidbParser, AnidbSearch
-
 
 PLUGIN_ID = 'fadbs_lookup'
 
@@ -29,7 +29,7 @@ class FadbsLookup(object):
                 titles.update({title.ep_type: []})
             titles[title.ep_type].append({
                 'lang': title.language,
-                'name': title.name
+                'name': title.name,
             })
         return titles
 
@@ -214,7 +214,7 @@ class FadbsLookup(object):
                 else:
                     log.trace("Genre %s parent genre, %s, is not in the database yet. \
                                When it's found, it will be added", item['name'], item['parentid'])
-            series_genre = session.query(AnimeGenreAssociation).filter(AnimeGenreAssociation.anidb_id == series.id, AnimeGenreAssociation.genre_id == genre.id).first()
+            series_genre = session.query(AnimeGenreAssociation).filter(AnimeGenreAssociation.anidb_id == series.id_, AnimeGenreAssociation.genre_id == genre.id_).first()
             if not series_genre:
                 series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
                 series.genres.append(series_genre)
@@ -228,12 +228,12 @@ class FadbsLookup(object):
             if not episode:
                 rating = [item['rating'], item['votes']]
                 number = [item['episode_number'], item['episode_type']]
-                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id)
+                episode = AnimeEpisode(item['id'], number, item['length'], item['airdate'], rating, series.id_)
                 for item_title in item['titles']:
                     lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item_title['lang']).first()
                     if not lang:
                         lang = AnimeLangauge(item_title['lang'])
-                    episode.titles.append(AnimeEpisodeTitle(episode.id, item_title['name'], lang.name))
+                    episode.titles.append(AnimeEpisodeTitle(episode.id_, item_title['name'], lang.name))
             series.episodes.append(episode)
         return series
 
@@ -242,7 +242,7 @@ class FadbsLookup(object):
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
             if not lang:
                 lang = AnimeLangauge(item['lang'])
-            series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id))
+            series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id_))
         return series
 
     def __parse_new_series(self, anidb_id, session):
