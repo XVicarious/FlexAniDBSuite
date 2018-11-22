@@ -31,7 +31,7 @@ class AnidbSearch(object):
     """Search for an anime's id."""
 
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
-    xml_cache_path = os.join(manager.config_base, 'anime-titles.xml')
+    xml_cache_path = os.path.join(manager.config_base, 'anime-titles.xml')
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
 
     particle_words = {
