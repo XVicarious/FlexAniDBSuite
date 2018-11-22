@@ -4,16 +4,16 @@ import hashlib
 import logging
 import os
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from bs4 import Tag
-from flexget import plugin
+from flexget import manager, plugin
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
 from .anidb_cache import cached_anidb, ANIDB_CACHE
 
-PLUGIN_ID = 'fadbs.util.anidb_parse'
+PLUGIN_ID = 'anidb_parse'
 
 CLIENT_STR = 'fadbs'
 CLIENT_VER = 1
@@ -30,6 +30,19 @@ class AnidbParser(object):
     """Fetch and parse an AniDB API entry."""
 
     anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime&aid=%s'
+
+    anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
+
+    @property
+    def is_banned():
+        if os.path.exists(self.anidb_ban_file):
+            with open(self.anidb_ban_file, 'r') as aniban:
+                banned_date = datetime(aniban.read())
+                aniban.close()
+                if datetime.now() - banned_date < timedelta(1):
+                    return True, banned_date + timedelta(1)
+                os.remove(self.anidb_ban_file)
+        return False, None
 
     DATE_FORMAT = '%Y-%m-%d'
 
@@ -185,15 +198,16 @@ class AnidbParser(object):
 
     @cached_anidb
     def parse(self, soup=None):
-
+        """Parse the xml file that we recieved from AniDB."""
         if not soup:
-            pre_cache_name = ('anime: %s' % self.anidb_id).encode()
-            url = (self.anidb_xml_url + "&client=%s&clientver=%s&protover=1") % (self.anidb_id, CLIENT_STR, CLIENT_VER)
+            if is_banned[0]:
+                raise plugin.PluginError('Banned from AniDB until {0}'.format(is_banned[1]))
+            pre_cache_name = 'anime: {0}'.format(self.anidb_id).encode()
+            url = (self.anidb_xml_url + '&client=%s&clientver=%s&protover=1') % (self.anidb_id, CLIENT_STR, CLIENT_VER)
             log.debug('Not in cache. Looking up URL: %s', url)
             page = requests.get(url)
             page = page.text
             # todo: move this to cached_anidb
-            from flexget.manager import manager
             if 'blake2b' in hashlib.algorithms_available:
                 blake = hashlib.new('blake2b')
                 blake.update(pre_cache_name)
@@ -206,12 +220,12 @@ class AnidbParser(object):
                 cache_file.close()
                 log.debug('%s cached.', self.anidb_id)
             # end
-            if '500' in page:
-                page_copy = page.lower()
-                if 'banned' in page_copy:
-                    raise plugin.PluginError('Banned from AniDB...', log)
+            if '500' in page and 'banned' in page.lower():
+                with open(os.path.join(self.anidb_ban_file) as aniban:
+                    aniban.write(datetime.now())
+                    aniban.close()
+                raise plugin.PluginError('Banned from AniDB...', log)
             soup = get_soup(page, parser='lxml-xml')
-            # We should really check if we're banned or what...
             if not soup:
                 log.warning('Uh oh: %s', url)
                 return
@@ -252,12 +266,12 @@ class AnidbParser(object):
             self.ratings = {
                 'permanent': {
                     'rating': permanent_tag.string,
-                    'votes': permanent_tag['count']
+                    'votes': permanent_tag['count'],
                 },
                 'mean': {
                     'rating': mean_tag.string,
-                    'votes': mean_tag['count']
-                }
+                    'votes': mean_tag['count'],
+                },
             }
 
         tag_root = root.find('tags')
