@@ -22,10 +22,11 @@ def cached_anidb(func):
         return blake.hexdigest()
 
     def open_soup(file_path):
-        with open(file_path, 'r') as soup_file:
-            soup = get_soup(soup_file, parser='lxml-xml')
-            soup_file.close()
-            return soup
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as soup_file:
+                soup = get_soup(soup_file, parser='lxml-xml')
+                soup_file.close()
+                return soup
         return None
 
     def decorator(*args, **kwargs):
