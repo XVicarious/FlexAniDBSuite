@@ -7,7 +7,8 @@ import re
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime, timedelta
 
-from flexget import manager, plugin
+from flexget import plugin
+from flexget.manager import manager
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
