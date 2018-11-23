@@ -7,7 +7,8 @@ from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime, timedelta
 
 from bs4 import Tag
-from flexget import manager, plugin
+from flexget import plugin
+from flexget.manager import manager
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
@@ -23,7 +24,7 @@ log = logging.getLogger(PLUGIN_ID)
 requests = Session()
 requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
-requests.add_domain_limiter(TimedLimiter('api.anidb.net', '2 seconds'))
+requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
 
 class AnidbParser(object):
@@ -34,10 +35,14 @@ class AnidbParser(object):
     anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
     @property
-    def is_banned():
+    def is_banned(self):
         if os.path.exists(self.anidb_ban_file):
             with open(self.anidb_ban_file, 'r') as aniban:
-                banned_date = datetime(aniban.read())
+                aniban_str = aniban.read()
+                if not aniban_str:
+                    os.remove(self.anidb_ban_file)
+                    return False, None
+                banned_date = datetime(int(aniban.read()))
                 aniban.close()
                 if datetime.now() - banned_date < timedelta(1):
                     return True, banned_date + timedelta(1)
@@ -200,13 +205,18 @@ class AnidbParser(object):
     def parse(self, soup=None):
         """Parse the xml file that we recieved from AniDB."""
         if not soup:
-            if is_banned[0]:
-                raise plugin.PluginError('Banned from AniDB until {0}'.format(is_banned[1]))
+            if self.is_banned[0]:
+                raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
             pre_cache_name = 'anime: {0}'.format(self.anidb_id).encode()
             url = (self.anidb_xml_url + '&client=%s&clientver=%s&protover=1') % (self.anidb_id, CLIENT_STR, CLIENT_VER)
             log.debug('Not in cache. Looking up URL: %s', url)
             page = requests.get(url)
             page = page.text
+            if '500' in page and 'banned' in page.lower():
+                with open(self.anidb_ban_file, 'w') as aniban:
+                    aniban.write(str(datetime.now().timestamp()))
+                    aniban.close()
+                raise plugin.PluginError('Banned from AniDB...', log)
             # todo: move this to cached_anidb
             if 'blake2b' in hashlib.algorithms_available:
                 blake = hashlib.new('blake2b')
@@ -220,11 +230,6 @@ class AnidbParser(object):
                 cache_file.close()
                 log.debug('%s cached.', self.anidb_id)
             # end
-            if '500' in page and 'banned' in page.lower():
-                with open(os.path.join(self.anidb_ban_file) as aniban:
-                    aniban.write(datetime.now())
-                    aniban.close()
-                raise plugin.PluginError('Banned from AniDB...', log)
             soup = get_soup(page, parser='lxml-xml')
             if not soup:
                 log.warning('Uh oh: %s', url)
