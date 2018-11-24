@@ -79,7 +79,7 @@ class AnidbParser(object):
         self.season = None
 
     def __str__(self):
-        return '<AnidbParser (name=%s, anidb_id=%s)>'.format('WIP', self.anidb_id)
+        return '<AnidbParser (name={0}, anidb_id={1})>'.format('WIP', self.anidb_id)
 
     def __append_title(self, title):
         self.titles.append({
@@ -133,13 +133,13 @@ class AnidbParser(object):
             'gender': character.find('gender').string,
             'character_type': {
                 'id': character_type['id'],
-                'name': character_type.string
+                'name': character_type.string,
             },
             'description': None if description is None else description.string,
             'seiyuu': {
                 'id': None if seiyuu is None else seiyuu['id'],
-                'name': None if seiyuu is None else seiyuu.string
-            }
+                'name': None if seiyuu is None else seiyuu.string,
+            },
         })
 
     @staticmethod
@@ -149,7 +149,7 @@ class AnidbParser(object):
             if isinstance(title, Tag):
                 titles.append({
                     'name': title.string,
-                    'lang': title['xml:lang']
+                    'lang': title['xml:lang'],
                 })
         return titles
 
@@ -165,7 +165,7 @@ class AnidbParser(object):
             'airdate': None if ep_airdate is None else datetime.strptime(ep_airdate.string, self.DATE_FORMAT).date(),
             'rating': None if rating is None else rating.string,
             'votes': None if rating is None else rating['votes'],
-            'titles': self.__find_episode_titles(episode.find_all('title'))
+            'titles': self.__find_episode_titles(episode.find_all('title')),
         })
 
     @staticmethod

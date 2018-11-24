@@ -26,8 +26,8 @@ class FadbsSeriesNfo(object):
                            'properties': {
                                'type': {'type': 'string', 'default': 'main'},
                                'emum': ['main', 'official', 'synonym', 'short'],
-                               'lang': {'type': 'string', 'default': 'x-jat'}}}}}
-        ]
+                               'lang': {'type': 'string', 'default': 'x-jat'}}}}},
+        ],
     }
 
     # These are all genres, genres that are True don't have possible overriding sub-genres
@@ -47,7 +47,7 @@ class FadbsSeriesNfo(object):
         2887: True,  # Tragedy
         2614: True, 1846: True, 2616: True, 1802: True, 1077: True, 922: True,  # Target Audiences
         2864: True, 2869: True,  # Daily Life and School Life
-        2881: True  # Sports
+        2881: True,  # Sports
     }
 
     def on_task_output(self, task, config):

@@ -103,7 +103,7 @@ class FadbsLookup(object):
         if not config:
             return
         for entry in task.entries:
-            if entry.get(series_name) or entry.get('anidb_id', eval_lazy=False):
+            if entry.get('series_name') or entry.get('anidb_id', eval_lazy=False):
                 # todo: thinking of using "in_" for this.
                 pass
 
@@ -125,7 +125,6 @@ class FadbsLookup(object):
     def lookup(self, entry, search_allowed=True, session=None):
         # Try to guarantee we have the AniDB id
         entry_title = entry.get('title', eval_lazy=False)
-        entry_title_extension = entry_title[-4:]
         if entry.get('anidb_id', eval_lazy=False):
             log.debug('The AniDB id is already there, and it is %s', entry['anidb_id'])
         elif entry.get('series_name', eval_lazy=False) and search_allowed:
@@ -133,13 +132,8 @@ class FadbsLookup(object):
             entry['anidb_id'] = AnidbSearch().by_name(entry['series_name'])
             if not entry['anidb_id']:
                 raise plugin.PluginError('The series AniDB id was not found.')
-        #elif entry_title and entry_title_extension != '.mkv' and entry_title_extension != '.mp4':
-        #    log.debug('No AniDB id, no series_name... Attempting title (not promising anything)')
-        #    entry['anidb_id'] = AnidbSearch().by_name(entry['title'])
-        #    if not entry['anidb_id']:
-        #        raise plugin.PluginError('The series AniDB id was not found :(.')
         else:
-            raise plugin.PluginError('anidb_id and series_name were not present for %s.' % entry_title)
+            raise plugin.PluginError('anidb_id and series_name were not present for {0}.'.format(entry_title))
 
         series = session.query(Anime).filter(Anime.anidb_id == entry['anidb_id']).first()
 

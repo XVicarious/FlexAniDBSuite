@@ -32,7 +32,14 @@ class AnidbSearch(object):
     """Search for an anime's id."""
 
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
-    xml_cache_path = os.path.join(manager.config_base, 'anime-titles.xml')
+    xml_cache = {
+        'path': os.path.join(manager.config_base, 'anime-titles.xml'),
+    }
+    xml_cache.update({
+        'exists': os.path.exists(xml_cache['path']),
+        'modified': os.path.getmtime(xml_cache['path']),
+    })
+    xml_cache_path = xml_cache['path']
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
 
     particle_words = {
@@ -106,10 +113,8 @@ class AnidbSearch(object):
         match_ratio -- what threshold we want to use for matching titles, default 0.9
         session -- SQLAlchemy session. Should be set by @with_session
         """
-        cache_exists = os.path.exists(self.xml_cache_path)
-        cache_mtime = datetime.fromtimestamp(os.path.getmtime(self.xml_cache_path))
-        abs_diff = abs(datetime.now() - cache_mtime)
-        if not cache_exists or abs_diff > timedelta(1):
+        abs_diff = abs(datetime.now() - self.xml_cache['modified'])
+        if not self.xml_cache['exists'] or abs_diff > timedelta(1):
             log.debug('Cache is old, downloading new...')
             self.__download_anidb_titles()
         matcher = difflib.SequenceMatcher(a=anime_name)
@@ -139,4 +144,4 @@ class AnidbSearch(object):
                         if not best_id or tup[1] > good_match[best_id]:
                             best_id = _id
                     return session.query(Anime).filter(Anime.id_ == _id).first().anidb_id
-        raise plugin.PluginError('Could not find the anidb id for %s'.format(anime_name))
+        raise plugin.PluginError('Could not find the anidb id for {0}'.format(anime_name))

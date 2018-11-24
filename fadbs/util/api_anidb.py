@@ -71,7 +71,7 @@ class Anime(Base):
 
     @property
     def expired(self):
-        """AniDB allows us to grab an entry once every 24 hours, lets stick to that."""
+        """Check if we can download a new cache from AniDB, 24 hour hard limit."""
         if self.updated is None:
             log.debug('updated is None: %s', self)
             return True
@@ -82,7 +82,7 @@ class Anime(Base):
         return False
 
     def __repr__(self):
-        return '<Anime(name=%s,type=%s,year=%s)>'.format(self.title_main, self.series_type, 0)
+        return '<Anime(name={0},type={1},year={2})>'.format(self.title_main, self.series_type, 0)
 
 
 class AnimeGenreAssociation(Base):
@@ -238,7 +238,7 @@ class AnimeEpisodeTitle(Base):
 def upgrade(ver, session):
     """Upgrade the database when something has changed."""
     if ver is None:
-        raise UpgradeImpossible('Resetting %s caches because bad data may have been cached.'.format(PLUGIN_ID))
+        raise UpgradeImpossible('Resetting {0} caches because bad data may have been cached.'.format(PLUGIN_ID))
     return ver
 
 
