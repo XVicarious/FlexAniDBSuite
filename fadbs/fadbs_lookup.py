@@ -19,7 +19,7 @@ log = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsLookup(object):
-    """ Lookup and Return an Anime """
+    """Lookup and Return an Anime."""
 
     @staticmethod
     def _title_dict(series):
