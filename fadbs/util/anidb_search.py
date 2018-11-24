@@ -37,7 +37,7 @@ class AnidbSearch(object):
     }
     xml_cache.update({
         'exists': os.path.exists(xml_cache['path']),
-        'modified': datetime.datetime(os.path.getmtime(xml_cache['path'])),
+        'modified': datetime(os.path.getmtime(xml_cache['path'])),
     })
     xml_cache_path = xml_cache['path']
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
