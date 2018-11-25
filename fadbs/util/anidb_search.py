@@ -121,11 +121,13 @@ class AnidbSearch(object):
         # Try to just get an exact match
         exact_title = session.query(AnimeTitle).filter(AnimeTitle.name == anime_name)
         if exact_title:
-            log.debug('Found an exact title, shortcutting!')
-            exact_title = exact_title.first()
-            exact_title_anidb_id = session.query(Anime)
-            exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title.parent_id).first()
-            return exact_title_anidb_id.anidb_id
+            exact_title_2 = exact_title.first()
+            if exact_title_2:
+                log.debug('Found an exact title, shortcutting!')
+                exact_title_anidb_id = session.query(Anime)
+                exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title_2.parent_id).first()
+                return exact_title_anidb_id.anidb_id
+            log.info(exact_title)
         # If we don't get a perfect match, use some hacky matching.
         matcher = difflib.SequenceMatcher(a=anime_name)
         countdown = 0
