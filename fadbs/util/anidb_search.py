@@ -13,7 +13,7 @@ from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
-from .api_anidb import Anime, AnimeTitle, AnimeLangauge
+from fadbs.util.api_anidb import Anime, AnimeTitle, AnimeLangauge
 
 PLUGIN_ID = 'anidb_search'
 
@@ -61,10 +61,9 @@ class AnidbSearch(object):
             for anime in animes:
                 anidb_id = int(anime['aid'])
                 # this doesn't allow for adding new titles to existing entries
-                if int(last) >= anidb_id:
-                    log.trace('%s exists in the DB, skipping', anidb_id)
-                    continue
-                series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
+                series = None
+                if int(last) < anidb_id:
+                    series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
                 if not series:
                     log.debug('The anime is not in the database, adding it')
                     series = Anime()
@@ -87,22 +86,18 @@ class AnidbSearch(object):
                     series.titles.append(anime_title)
                 session.add(series)
             session.commit()
-
-    @with_session
-    def _load_xml_to_database(self, session=None):
-        with open(self.xml_cache['path'], 'r') as xml_anime:
-            get_soup(xml_anime, parser='lxml-xml')
-
+ 
     def __download_anidb_titles(self):
         #anidb_titles = requests.get(self.anidb_title_dump_url)
         #if anidb_titles.status_code >= 400:
         #    raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
-        #if os.path.exists(cache_path):
-        #    os.rename(cache_path, cache_path + '.old')
-        #with open(cache_path, 'w') as xml_file:
+        #if os.path.exists(self.xml_cache['path']):
+        #    os.rename(self.xml_cache['path'], self.xml_cache['path'] + '.old')
+        #with open(self.xml_cache['path'], 'w') as xml_file:
         #    xml_file.write(anidb_titles.text)
         #    xml_file.close()
-        self.xml_cache['modified'] = datetime.fromtimestamp(os.path.getmtime(self.xml_cache['path']))
+        new_mtime = os.path.getmtime(self.xml_cache['path'])
+        self.xml_cache['modified'] = datetime.fromtimestamp(new_mtime)
         self.__load_xml_to_database(self.xml_cache['path'])
 
     @with_session
@@ -115,20 +110,19 @@ class AnidbSearch(object):
         """
         # Make sure our database is up to date
         abs_diff = abs(datetime.now() - self.xml_cache['modified'])
+        log.trace('Cache expires in %s', str(abs_diff))
         if not self.xml_cache['exists'] or abs_diff > timedelta(1):
             log.debug('Cache is old, downloading new...')
             self.__download_anidb_titles()
         # Try to just get an exact match
         exact_title = session.query(AnimeTitle).filter(AnimeTitle.name == anime_name)
-        if exact_title:
-            exact_title_2 = exact_title.first()
-            if exact_title_2:
-                log.debug('Found an exact title, shortcutting!')
-                exact_title_anidb_id = session.query(Anime)
-                exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title_2.parent_id).first()
-                return exact_title_anidb_id.anidb_id
-            log.info(exact_title)
+        if len(exact_title):
+            log.debug('Found an exact title, shortcutting!')
+            exact_title_anidb_id = session.query(Anime)
+            exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title.parent_id).first()
+            return exact_title_anidb_id.anidb_id
         # If we don't get a perfect match, use some hacky matching.
+        log.debug('Exact match not found, searching database.')
         matcher = difflib.SequenceMatcher(a=anime_name)
         countdown = 0
         good_match = {}
@@ -148,10 +142,10 @@ class AnidbSearch(object):
                 continue
             if countdown > 0:
                 countdown -= 1
-                if countdown == 0 and len(good_match):
-                    best_id = None
-                    for _id, tup in good_match.items():
-                        if not best_id or tup[1] > good_match[best_id]:
-                            best_id = _id
-                    return session.query(Anime).filter(Anime.id_ == _id).first().anidb_id
+            if countdown == 1 and len(good_match):
+                best_id = None
+                for _id, tup in good_match.items():
+                    if not best_id or tup[1] > good_match[best_id]:
+                        best_id = _id
+                return session.query(Anime).filter(Anime.id_ == best_id).first().anidb_id
         raise plugin.PluginError('Could not find the anidb id for {0}'.format(anime_name))
