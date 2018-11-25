@@ -1,6 +1,5 @@
 from __future__ import unicode_literals, division, absolute_import
 
-import hashlib
 import logging
 import os
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
@@ -36,6 +35,7 @@ class AnidbParser(object):
 
     @property
     def is_banned(self):
+        """Check if we are banned from AniDB."""
         if os.path.exists(self.anidb_ban_file):
             with open(self.anidb_ban_file, 'r') as aniban:
                 aniban_str = aniban.read()
@@ -207,7 +207,6 @@ class AnidbParser(object):
         if not soup:
             if self.is_banned[0]:
                 raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
-            pre_cache_name = 'anime: {0}'.format(self.anidb_id).encode()
             url = (self.anidb_xml_url + '&client=%s&clientver=%s&protover=1') % (self.anidb_id, CLIENT_STR, CLIENT_VER)
             log.debug('Not in cache. Looking up URL: %s', url)
             page = requests.get(url)
@@ -217,19 +216,11 @@ class AnidbParser(object):
                     aniban.write(str(datetime.now().timestamp()))
                     aniban.close()
                 raise plugin.PluginError('Banned from AniDB...', log)
-            # todo: move this to cached_anidb
-            if 'blake2b' in hashlib.algorithms_available:
-                blake = hashlib.new('blake2b')
-                blake.update(pre_cache_name)
-                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, blake.hexdigest())
-            else:
-                md5sum = hashlib.md5(pre_cache_name).hexdigest()
-                cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, md5sum)
+            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, self.anidb_id, '.anime')
             with open(cache_filename, 'w') as cache_file:
                 cache_file.write(page)
                 cache_file.close()
                 log.debug('%s cached.', self.anidb_id)
-            # end
             soup = get_soup(page, parser='lxml-xml')
             if not soup:
                 log.warning('Uh oh: %s', url)
