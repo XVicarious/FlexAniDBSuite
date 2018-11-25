@@ -18,7 +18,7 @@ def cached_anidb(func):
         anidb_id = args[0].anidb_id
         if anidb_id:
             log.trace('We have an anidb_id!')
-            cache_file = os.path.join(manager.config_base, ANIDB_CACHE, anidb_id, '.anime')
+            cache_file = os.path.join(manager.config_base, ANIDB_CACHE, str(anidb_id), '.anime')
             if os.path.exists(cache_file):
                 with open(cache_file, 'r') as soup_file:
                     soup = get_soup(soup_file, parser='lxml-xml')

@@ -216,7 +216,7 @@ class AnidbParser(object):
                     aniban.write(str(datetime.now().timestamp()))
                     aniban.close()
                 raise plugin.PluginError('Banned from AniDB...', log)
-            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, self.anidb_id, '.anime')
+            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, str(self.anidb_id), '.anime')
             with open(cache_filename, 'w') as cache_file:
                 cache_file.write(page)
                 cache_file.close()
