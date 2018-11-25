@@ -42,7 +42,7 @@ class AnidbParser(object):
                 if not aniban_str:
                     os.remove(self.anidb_ban_file)
                     return False, None
-                banned_date = datetime(int(aniban.read()))
+                banned_date = datetime.fromtimestamp(float(aniban_str))
                 aniban.close()
                 if datetime.now() - banned_date < timedelta(1):
                     return True, banned_date + timedelta(1)
