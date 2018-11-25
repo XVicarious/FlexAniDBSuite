@@ -39,7 +39,6 @@ class AnidbSearch(object):
         'exists': os.path.exists(xml_cache['path']),
         'modified': datetime.fromtimestamp(os.path.getmtime(xml_cache['path'])),
     })
-    xml_cache_path = xml_cache['path']
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
 
     particle_words = {
@@ -62,7 +61,7 @@ class AnidbSearch(object):
             for anime in animes:
                 anidb_id = int(anime['aid'])
                 # this doesn't allow for adding new titles to existing entries
-                if int(last) > anidb_id:
+                if int(last) >= anidb_id:
                     log.trace('%s exists in the DB, skipping', anidb_id)
                     continue
                 series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
@@ -91,7 +90,7 @@ class AnidbSearch(object):
 
     @with_session
     def _load_xml_to_database(self, session=None):
-        with open(self.xml_cache_path, 'r') as xml_anime:
+        with open(self.xml_cache['path'], 'r') as xml_anime:
             get_soup(xml_anime, parser='lxml-xml')
 
     def __download_anidb_titles(self):
@@ -103,7 +102,8 @@ class AnidbSearch(object):
         #with open(cache_path, 'w') as xml_file:
         #    xml_file.write(anidb_titles.text)
         #    xml_file.close()
-        self.__load_xml_to_database(self.xml_cache_path)
+        self.xml_cache['modified'] = datetime.fromtimestamp(os.path.getmtime(self.xml_cache['path']))
+        self.__load_xml_to_database(self.xml_cache['path'])
 
     @with_session
     def by_name(self, anime_name, match_ratio=0.9, session=None):
@@ -113,22 +113,30 @@ class AnidbSearch(object):
         match_ratio -- what threshold we want to use for matching titles, default 0.9
         session -- SQLAlchemy session. Should be set by @with_session
         """
+        # Make sure our database is up to date
         abs_diff = abs(datetime.now() - self.xml_cache['modified'])
         if not self.xml_cache['exists'] or abs_diff > timedelta(1):
             log.debug('Cache is old, downloading new...')
             self.__download_anidb_titles()
+        # Try to just get an exact match
+        exact_title = session.query(AnimeTitle).filter(AnimeTitle.name == anime_name)
+        if exact_title:
+            log.debug('Found an exact title, shortcutting!')
+            exact_title = exact_title.first()
+            exact_title_anidb_id = session.query(Anime)
+            exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title.parent_id).first()
+            return exact_title_anidb_id.anidb_id
+        # If we don't get a perfect match, use some hacky matching.
         matcher = difflib.SequenceMatcher(a=anime_name)
         countdown = 0
         good_match = {}
         possible_titles = session.query(AnimeTitle).all()
+        log.debug('Loaded %s titles from the database...', len(possible_titles))
         for title in possible_titles:
             matcher.set_seq2(title.name)
             rat = matcher.ratio()
             end_this = False
             if rat > match_ratio:
-                if rat == 1:
-                    log.debug('Found %s, which matches %s perfectly.', title.name, anime_name)
-                    return title.parent_id
                 if len(good_match) and title.parent_id in good_match:
                     end_this = True
                 countdown += 5
