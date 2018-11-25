@@ -9,9 +9,9 @@ from flexget.event import event
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
-from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
-from .util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
-from .util import AnidbParser, AnidbSearch
+from fadbs.util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
+from fadbs.util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
+from fadbs.util import AnidbParser, AnidbSearch
 
 PLUGIN_ID = 'fadbs_lookup'
 
@@ -151,9 +151,8 @@ class FadbsLookup(object):
         # and let the user set it themselves if they want, to
         # a minimum of 24 hours due to AniDB's policies...
 
-        log.debug('Starting to parse Anime %s', entry['anidb_id'])
         try:
-            series = self.__parse_new_series(entry['anidb_id'], session)
+            series = self._parse_new_series(entry['anidb_id'], session)
         except UnicodeDecodeError:
             log.error('Unable to determine encoding for %s. Try installing chardet', entry['anidb_id'])
             series = Anime()
@@ -162,17 +161,13 @@ class FadbsLookup(object):
             session.commit()
             raise plugin.PluginError('Invalid parameter', log)
         except ValueError as valueError:
-            raise plugin.PluginError(valueError, log)
+            raise valueError
 
         # todo: trace log attributes?
 
         entry.update_using_map(self.field_map, series)
 
-    @staticmethod
-    def __query_and_filter(session, what, sql_filter):
-        return session.query(what).filter(sql_filter)
-
-    def __remove_blacklist(self, genres):
+    def _remove_blacklist(self, genres):
         temp_genres = genres.copy()
         for genre in temp_genres:
             log.trace('Checking %s (%s)', genre['name'], genre['id'])
@@ -196,8 +191,8 @@ class FadbsLookup(object):
                 genres.remove(genre)
         return genres
 
-    def __add_genres(self, series, genres, session):
-        genres = self.__remove_blacklist(genres)
+    def _add_genres(self, series, genres, session):
+        genres = self._remove_blacklist(genres)
         genres_list = sorted(genres, key=lambda k: k['parentid'])
         for item in genres_list:
             genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['id']).first()
@@ -211,7 +206,9 @@ class FadbsLookup(object):
                 else:
                     log.trace("Genre %s parent genre, %s, is not in the database yet. \
                                When it's found, it will be added", item['name'], item['parentid'])
-            series_genre = session.query(AnimeGenreAssociation).filter(AnimeGenreAssociation.anidb_id == series.id_, AnimeGenreAssociation.genre_id == genre.id_).first()
+            series_genre = session.query(AnimeGenreAssociation).filter(
+                    AnimeGenreAssociation.anidb_id == series.id_,
+                    AnimeGenreAssociation.genre_id == genre.id_).first()
             if not series_genre:
                 series_genre = AnimeGenreAssociation(genre=genre, genre_weight=item['weight'])
                 series.genres.append(series_genre)
@@ -219,7 +216,7 @@ class FadbsLookup(object):
                 series_genre.genre_weight = item['weight']
         return series
 
-    def __add_episodes(self, series, episodes, session):
+    def _add_episodes(self, series, episodes, session):
         for item in episodes:
             episode = session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == item['id']).first()
             if not episode:
@@ -234,7 +231,7 @@ class FadbsLookup(object):
             series.episodes.append(episode)
         return series
 
-    def __add_titles(self, series, titles, session):
+    def _add_titles(self, series, titles, session):
         for item in titles:
             lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == item['lang']).first()
             if not lang:
@@ -242,9 +239,9 @@ class FadbsLookup(object):
             series.titles.append(AnimeTitle(item['name'], lang.name, item['type'], series.id_))
         return series
 
-    def __parse_new_series(self, anidb_id, session):
+    def _parse_new_series(self, anidb_id, session):
 
-        def __debug_parse(what):
+        def debug_parse(what):
             log.debug('Parsing %s for AniDB %s', what, anidb_id)
 
         parser = AnidbParser(anidb_id)
@@ -275,14 +272,14 @@ class FadbsLookup(object):
             mean_rating = parser.ratings['mean']
             series.mean_rating = None if mean_rating is None else mean_rating['rating']
 
-        __debug_parse('genres')
-        series = self.__add_genres(series, parser.genres, session)
+        debug_parse('genres')
+        series = self._add_genres(series, parser.genres, session)
 
-        __debug_parse('episodes')
-        series = self.__add_episodes(series, parser.episodes, session)
+        debug_parse('episodes')
+        series = self._add_episodes(series, parser.episodes, session)
 
-        __debug_parse('titles')
-        series = self.__add_titles(series, parser.titles, session)
+        debug_parse('titles')
+        series = self._add_titles(series, parser.titles, session)
 
         series.updated = datetime.utcnow()
 
