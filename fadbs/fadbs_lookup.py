@@ -138,10 +138,12 @@ class FadbsLookup(object):
         series = session.query(Anime).filter(Anime.anidb_id == entry['anidb_id']).first()
 
         if series and not series.expired:
+            log.debug('series exists and it is not expired')  # todo: TEMP
             entry.update_using_map(self.field_map, series)
             return
 
         if series is not None:
+            log.debug('series is not none')  # todo: TEMP
             session.commit()
 
         # There is a whole part about expired entries here.
@@ -149,6 +151,7 @@ class FadbsLookup(object):
         # and let the user set it themselves if they want, to
         # a minimum of 24 hours due to AniDB's policies...
 
+        log.debug('Starting to parse Anime %s', entry['anidb_id'])
         try:
             series = self.__parse_new_series(entry['anidb_id'], session)
         except UnicodeDecodeError:
@@ -158,8 +161,8 @@ class FadbsLookup(object):
             session.add(series)
             session.commit()
             raise plugin.PluginError('Invalid parameter', log)
-        except ValueError:
-            raise plugin.PluginError('invalid parameter', log)
+        except ValueError as valueError:
+            raise plugin.PluginError(valueError, log)
 
         # todo: trace log attributes?
 
