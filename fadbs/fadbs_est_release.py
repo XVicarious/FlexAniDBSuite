@@ -8,7 +8,7 @@ from flexget import plugin
 from flexget.event import event
 from flexget.utils.database import with_session
 
-from fadbs.fadbs_lookup import Anime
+from fadbs.fadbs_lookup import Anime, AnimeTitle
 
 PLUGIN_ID = 'fadbs_est_release'
 
@@ -23,6 +23,16 @@ class EstimateSeriesAniDb(object):
         if not all(field in entry for field in ['series_name']):
             log.debug('%s did not have the required attributes to search for the episode', entry['title'])
             return
+        exact_match = session.query(AnimeTitle).filter(AnimeTitle.name == entry['series_name'])
+        if len(exact_match):
+            exact_match = exact_match.first().parent_id
+            exact_anime = session.query(Anime).join(Anime.episodes).filter(Anime.id_ == exact_match)
+            if len(exact_anime):
+                anime_episodes = exact_anime.first().episodes
+                series_episode = str(entry.get('series_episode'))
+                airdate = [episode.airdate for episode in anime_episodes if episode.number == series_episode]
+                airdate = airdate[0] if len(airdate) else None
+                return airdate
         pre_anime = session.query(Anime).join(Anime.titles).all()
         log.trace('Retrieved %s Anime from the database.', len(pre_anime))
         seq_matcher = difflib.SequenceMatcher(a=entry.get('series_name').lower())
