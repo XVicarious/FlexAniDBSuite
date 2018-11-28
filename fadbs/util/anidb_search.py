@@ -13,7 +13,7 @@ from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
-from fadbs.util.api_anidb import Anime, AnimeTitle, AnimeLangauge
+from .api_anidb import Anime, AnimeTitle, AnimeLangauge
 
 PLUGIN_ID = 'anidb_search'
 
@@ -49,20 +49,21 @@ class AnidbSearch(object):
 
     def __init__(self):
         self.debug = False
+        with open(self.xml_cache['path'], 'r') as soup_file:
+            self.soup = get_soup(soup_file, parser='lxml-xml')
 
     @with_session
     def __load_xml_to_database(self, cache_path, session=None):
-        with open(cache_path, 'r') as anidb_dump:
-            soup = get_soup(anidb_dump, parser='lxml-xml')
+        if True:
             last = session.query(Anime).order_by(Anime.anidb_id.desc()).first()
             if last:
                 last = last.anidb_id
-            animes = soup.find_all('anime')
+            animes = self.soup.find_all('anime')
             for anime in animes:
                 anidb_id = int(anime['aid'])
                 # this doesn't allow for adding new titles to existing entries
                 series = None
-                if int(last) < anidb_id:
+                if int(last) > anidb_id:
                     series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
                 if not series:
                     log.debug('The anime is not in the database, adding it')
@@ -80,11 +81,12 @@ class AnidbSearch(object):
                                                      AnimeTitle.ep_type == title_type,
                                                      AnimeTitle.name == title.string).first()
                     if anime_title:
-                        log.debug('we already have this title, continuing')
+                        log.trace('we already have this title, continuing')
                         continue
                     anime_title = AnimeTitle(title.string, lang.name, title_type, series)
                     series.titles.append(anime_title)
-                session.add(series)
+                if int(last) < anidb_id:
+                    session.add(series)
             session.commit()
  
     def __download_anidb_titles(self):
@@ -115,8 +117,8 @@ class AnidbSearch(object):
             log.debug('Cache is old, downloading new...')
             self.__download_anidb_titles()
         # Try to just get an exact match
-        exact_title = session.query(AnimeTitle).filter(AnimeTitle.name == anime_name)
-        if len(exact_title):
+        exact_title = session.query(AnimeTitle).filter(AnimeTitle.name == anime_name).first()
+        if exact_title:
             log.debug('Found an exact title, shortcutting!')
             exact_title_anidb_id = session.query(Anime)
             exact_title_anidb_id = exact_title_anidb_id.filter(Anime.id_ == exact_title.parent_id).first()

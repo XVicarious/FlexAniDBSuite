@@ -202,7 +202,7 @@ class FadbsLookup(object):
             if genre.parent_id is None and item['parentid']:
                 parent_genre = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == item['parentid']).first()
                 if parent_genre:
-                    genre.parent_id = parent_genre.id
+                    genre.parent_id = parent_genre.id_
                 else:
                     log.trace("Genre %s parent genre, %s, is not in the database yet. \
                                When it's found, it will be added", item['name'], item['parentid'])
