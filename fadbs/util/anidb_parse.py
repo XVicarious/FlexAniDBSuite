@@ -229,20 +229,7 @@ class AnidbParser(object):
     def parse(self, soup=None):
         """Parse the xml file that we recieved from AniDB."""
         if not soup:
-            if self.is_banned[0]:
-                raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
-            url = (self.anidb_xml_url + '&client=%s&clientver=%s&protover=1') % (self.anidb_id, CLIENT_STR, CLIENT_VER)
-            log.debug('Not in cache. Looking up URL: %s', url)
-            page = self.request_anime(self.anidb_id)
-            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, str(self.anidb_id) + '.anime')
-            with open(cache_filename, 'w') as cache_file:
-                cache_file.write(page)
-                cache_file.close()
-                log.debug('%s cached.', self.anidb_id)
-            soup = get_soup(page, parser='lxml-xml')
-            if not soup:
-                log.warning('Uh oh: %s', url)
-                return
+            raise plugin.PluginError('anidb_cache didn\'t give us anything.')
 
         root = soup.find('anime')
 

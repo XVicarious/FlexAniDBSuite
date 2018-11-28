@@ -9,9 +9,9 @@ from flexget.event import event
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
-from fadbs.util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
-from fadbs.util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
-from fadbs.util import AnidbParser, AnidbSearch
+from .util.api_anidb import Anime, AnimeGenre, AnimeTitle, AnimeLangauge, AnimeGenreAssociation
+from .util.api_anidb import AnimeEpisode, AnimeEpisodeTitle
+from .util import AnidbParser, AnidbSearch
 
 PLUGIN_ID = 'fadbs_lookup'
 

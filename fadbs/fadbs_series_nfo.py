@@ -6,7 +6,7 @@ from flexget import plugin
 from flexget.event import event
 from flexget.utils import template
 
-from fadbs.util.stucture_utils import find_in_list_of_dict
+from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
