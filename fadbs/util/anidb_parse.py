@@ -213,8 +213,6 @@ class AnidbParser(object):
             raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
         params = self.anidb_params.copy()
         params.update(request='anime', aid=self.anidb_id)
-        log.info(params)
-        raise plugin.PluginError('Safety raise')
         page = requests.get(self.anidb_endpoint, params=params)
         page = page.text
         if '500' in page and 'banned' in page.lower():
