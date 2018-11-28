@@ -29,7 +29,14 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 class AnidbParser(object):
     """Fetch and parse an AniDB API entry."""
 
-    anidb_xml_url = 'http://api.anidb.net:9001/httpapi?request=anime&aid=%s'
+    anidb_xml_url = 'http://api.anidb.net:9001/httpapi?client={0}&clientver={1}&protover=1'.format(CLIENT_STR, CLIENT_VER)
+    anidb_endpoint = 'http://api.anidb.net:9001/httpapi'
+    anidb_params = {
+        'client': CLIENT_STR,
+        'clientver': CLIENT_VER,
+        'protover': 1,
+    }
+    anidb_anime_url = anidb_xml_url + '&request=anime&aid=%s'
 
     anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
@@ -201,6 +208,23 @@ class AnidbParser(object):
         if related_tag is not None:
             self.__parse_tiered_tag(related_tag, self.__append_related)
 
+    def request_anime(self):
+        if self.is_banned[0]:
+            raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
+        params = self.anidb_params.copy()
+        params.update(request='anime', aid=self.anidb_id)
+        log.info(params)
+        raise plugin.PluginError('Safety raise')
+        page = requests.get(self.anidb_endpoint, params=params)
+        page = page.text
+        if '500' in page and 'banned' in page.lower():
+            time_now = datetime.now().timestamp()
+            with open(self.anidb_ban_file, 'w') as aniban:
+                aniban.write(str(time_now))
+                aniban.close()
+            raise plugin.PluginError('Banned from AniDB until {0}'.format(time_now + timedelta(1)))
+        return page
+
     @cached_anidb
     def parse(self, soup=None):
         """Parse the xml file that we recieved from AniDB."""
@@ -209,14 +233,8 @@ class AnidbParser(object):
                 raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
             url = (self.anidb_xml_url + '&client=%s&clientver=%s&protover=1') % (self.anidb_id, CLIENT_STR, CLIENT_VER)
             log.debug('Not in cache. Looking up URL: %s', url)
-            page = requests.get(url)
-            page = page.text
-            if '500' in page and 'banned' in page.lower():
-                with open(self.anidb_ban_file, 'w') as aniban:
-                    aniban.write(str(datetime.now().timestamp()))
-                    aniban.close()
-                raise plugin.PluginError('Banned from AniDB...', log)
-            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, str(self.anidb_id), '.anime')
+            page = self.request_anime(self.anidb_id)
+            cache_filename = os.path.join(manager.config_base, ANIDB_CACHE, str(self.anidb_id) + '.anime')
             with open(cache_filename, 'w') as cache_file:
                 cache_file.write(page)
                 cache_file.close()
