@@ -14,6 +14,7 @@ from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
 from .api_anidb import Anime, AnimeTitle, AnimeLangauge
+from .anidb_parse import AnidbParser
 
 PLUGIN_ID = 'anidb_search'
 
@@ -53,42 +54,42 @@ class AnidbSearch(object):
             self.soup = get_soup(soup_file, parser='lxml-xml')
 
     @with_session
-    def __load_xml_to_database(self, cache_path, session=None):
-        if True:
-            last = session.query(Anime).order_by(Anime.anidb_id.desc()).first()
-            if last:
-                last = last.anidb_id
-            animes = self.soup.find_all('anime')
-            for anime in animes:
-                anidb_id = int(anime['aid'])
-                # this doesn't allow for adding new titles to existing entries
-                series = None
-                if int(last) > anidb_id:
-                    series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
-                if not series:
-                    log.debug('The anime is not in the database, adding it')
-                    series = Anime()
-                    series.anidb_id = anidb_id
-                titles = anime.find_all('title')
-                for title in titles:
-                    title_lang = title['xml:lang']
-                    title_type = title['type']
-                    lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == title_lang).first()
-                    if not lang:
-                        lang = AnimeLangauge(title_lang)
-                    anime_title = session.query(AnimeTitle)
-                    anime_title = anime_title.filter(AnimeTitle.name == title.string,
-                                                     AnimeTitle.ep_type == title_type,
-                                                     AnimeTitle.name == title.string).first()
-                    if anime_title:
-                        log.trace('we already have this title, continuing')
-                        continue
-                    anime_title = AnimeTitle(title.string, lang.name, title_type, series)
-                    series.titles.append(anime_title)
-                if int(last) < anidb_id:
-                    session.add(series)
-            session.commit()
- 
+    def __load_xml_to_database(self, session=None):
+
+        last = session.query(Anime).order_by(Anime.anidb_id.desc()).first()
+        if last:
+            last = last.anidb_id
+        animes = self.soup.find_all('anime')
+        for anime in animes:
+            anidb_id = int(anime['aid'])
+            # this doesn't allow for adding new titles to existing entries
+            series = None
+            if int(last) > anidb_id:
+                series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
+            if not series:
+                log.debug('The anime is not in the database, adding it')
+                series = Anime()
+                series.anidb_id = anidb_id
+            titles = anime.find_all('title')
+            for title in titles:
+                title_lang = title['xml:lang']
+                title_type = title['type']
+                lang = session.query(AnimeLangauge).filter(AnimeLangauge.name == title_lang).first()
+                if not lang:
+                    lang = AnimeLangauge(title_lang)
+                anime_title = session.query(AnimeTitle)
+                anime_title = anime_title.filter(AnimeTitle.name == title.string,
+                                                 AnimeTitle.ep_type == title_type,
+                                                 AnimeTitle.name == title.string).first()
+                if anime_title:
+                    log.trace('we already have this title, continuing')
+                    continue
+                anime_title = AnimeTitle(title.string, lang.name, title_type, series)
+                series.titles.append(anime_title)
+            if int(last) < anidb_id:
+                session.add(series)
+        session.commit()
+
     def __download_anidb_titles(self):
         #anidb_titles = requests.get(self.anidb_title_dump_url)
         #if anidb_titles.status_code >= 400:
@@ -99,8 +100,41 @@ class AnidbSearch(object):
         #    xml_file.write(anidb_titles.text)
         #    xml_file.close()
         new_mtime = os.path.getmtime(self.xml_cache['path'])
+        if self.debug:
+            new_mtime = datetime.now()
         self.xml_cache['modified'] = datetime.fromtimestamp(new_mtime)
-        self.__load_xml_to_database(self.xml_cache['path'])
+        self.__load_xml_to_database()
+
+    @with_session
+    def lookup_series(self, name=None, anidb_id=None, only_cached=False, session=None):
+        """Lookup an Anime series and return it."""
+        diff = datetime.now() - self.xml_cache['modified']
+        if not self.xml_cache['exists'] or diff > timedelta(1):
+            log_mess = 'Cache is expired, %s' if self.xml_cache['exists'] else 'Cache does not exist, %s'
+            log.info(log_mess, 'downloading now.')
+            self.__download_anidb_titles()
+
+        if not (anidb_id or name):
+            raise plugin.PluginError('anidb_id and name are both None, cannot continue.')
+
+        if anidb_id:
+            log.debug('AniDB id is present and is %s.', anidb_id)
+            series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
+            if not only_cached and (not series or series.expired is None or series.expired):
+                series = Anime()
+                series.anidb_id = anidb_id
+                return series  # todo: download and parse a series
+            return series
+
+        log.debug('AniDB id not present, looking up by the title, %s', name)
+        series_titles = Anime.titles
+        series_filter = series_titles.ilike(name)
+        series = session.query(Anime).join(series_titles).filter(series_filter).first()
+        if series and (only_cached or (series.expired is not None and not series.expired)):
+            return series
+        series = Anime()
+        series.anidb_id = anidb_id
+        return series  # todo: search for series, if not add it and return it
 
     @with_session
     def by_name(self, anime_name, match_ratio=0.9, session=None):

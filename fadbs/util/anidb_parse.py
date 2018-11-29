@@ -9,9 +9,8 @@ from bs4 import Tag
 from flexget import plugin
 from flexget.manager import manager
 from flexget.utils.requests import Session, TimedLimiter
-from flexget.utils.soup import get_soup
 
-from .anidb_cache import cached_anidb, ANIDB_CACHE
+from .anidb_cache import cached_anidb
 
 PLUGIN_ID = 'anidb_parse'
 

@@ -1,16 +1,16 @@
 """AniDB Database Table Things."""
 from __future__ import unicode_literals, division, absolute_import
 
+import logging
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime
-import logging
-from sqlalchemy import Table, Column, Integer, Float, String, Unicode, DateTime, Text, Date
+
+from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
 from flexget import db_schema
 from flexget.db_schema import UpgradeImpossible
-from flexget.utils.database import with_session
 
 from .anidb_parse import AnidbParser
 
@@ -240,12 +240,3 @@ def upgrade(ver, session):
     if ver is None:
         raise UpgradeImpossible('Resetting {0} caches because bad data may have been cached.'.format(PLUGIN_ID))
     return ver
-
-
-@with_session
-def lookup_series(name=None, anidb_id=None, only_cached=False, session=None):
-
-    if anidb_id:
-        series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
-    if not series and name:
-        return
