@@ -121,9 +121,8 @@ class AnidbSearch(object):
             log.debug('AniDB id is present and is %s.', anidb_id)
             series = session.query(Anime).filter(Anime.anidb_id == anidb_id).first()
             if not only_cached and (not series or series.expired is None or series.expired):
-                series = Anime()
-                series.anidb_id = anidb_id
-                return series  # todo: download and parse a series
+                parser = AnidbParser(anidb_id)
+                return parser.parse()
             return series
 
         log.debug('AniDB id not present, looking up by the title, %s', name)

@@ -1,6 +1,6 @@
 """Large and long lists and such for AniDB."""
 
-default_tag_blacklist = {
+DEFAULT_TAG_BLACKLIST = {
     # Tags to remove, recursive
     -1: True,
     30: True,

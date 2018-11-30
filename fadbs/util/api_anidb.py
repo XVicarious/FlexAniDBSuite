@@ -3,7 +3,7 @@ from __future__ import unicode_literals, division, absolute_import
 
 import logging
 from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
@@ -11,8 +11,6 @@ from sqlalchemy.schema import ForeignKey, Index
 
 from flexget import db_schema
 from flexget.db_schema import UpgradeImpossible
-
-from .anidb_parse import AnidbParser
 
 SCHEMA_VER = 1
 
@@ -76,9 +74,9 @@ class Anime(Base):
             log.debug('updated is None: %s', self)
             return True
         tdelta = datetime.utcnow() - self.updated
-        if tdelta.total_seconds() >= AnidbParser.RESOURCE_MIN_CACHE:
+        if tdelta >= timedelta(days=1):
             return True
-        log.info('This entry will expire in: %s seconds', AnidbParser.RESOURCE_MIN_CACHE - tdelta.total_seconds())
+        log.info('This entry will expire in: %s seconds', timedelta(days=1) - tdelta)
         return False
 
     def __repr__(self):

@@ -5,8 +5,7 @@ from typing import Type
 
 from flexget import plugin
 
-from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeGenre, AnimeGenreAssociation, AnimeLanguage, AnimeTitle
-from .anidb_structs import default_tag_blacklist
+from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeLanguage, AnimeTitle
 
 PLUGIN_ID = 'anidb_parser'
 
@@ -60,7 +59,7 @@ class AnidbParserTemplate(object):
             raise plugin.PluginError('titles_tag was None')
         series_id = self.series.id_
         for title in titles_tag.find_all(True, recursive=False):
-            lang = self._find_lang(title['xml:lang'])
+            lang = self._find_lang(title['xml:lang'], session)
             anime_title = AnimeTitle(title['name'], lang.name, title['type'], series_id)
             self.series.titles.append(anime_title)
 
@@ -90,64 +89,7 @@ class AnidbParserTemplate(object):
                 db_episode = AnimeEpisode(int(episode['id']), number, length, airdate, rating, series_id)
                 episode_id = db_episode.id_
                 for episode_title in episode.find_all('title'):
-                    lang = self._find_lang(episode_title['xml:lang'])
+                    lang = self._find_lang(episode_title['xml:lang'], session)
                     anime_episode_title = AnimeEpisodeTitle(episode_id, episode_title['name'], lang.name)
                     db_episode.titles.append(anime_episode_title)
                 self.series.episodes.append(db_episode)
-
-    def _recurse_remove_tags(self, tags, tag_id):
-        intermediate_tags = [tag_id]
-        idx = 0
-        while idx < len(tags):
-            tmp_tag = tags[idx]
-            tmp_tag_id = int(tmp_tag['id'])
-            tmp_tag_parent_id = int(tmp_tag['parentid']) if 'parentid' in tmp_tag.attrs else 0
-            if tmp_tag_parent_id in intermediate_tags:
-                intermediate_tags.append(tmp_tag_id)
-                tags.remove(tmp_tag)
-                idx = 0
-            else:
-                idx += 1
-
-    def _remove_blacklist_tags(self, tags):
-        temp_tags = tags.copy()
-        for tag in temp_tags:
-            name = tag.find('name')
-            name = name.string if name else ''
-            LOG.trace('Checking %s (%s)', name, tag['id'])
-            if tag['id'] in default_tag_blacklist:
-                LOG.debug('%s (%s) in the blacklist... Taking action.', name, tag['id'])
-                if default_tag_blacklist.get(tag['id']):
-                    LOG.debug('%s (%s) is set to True... Recursively removing tags.', name, tag['id'])
-                    self._recurse_remove_tags(tags, tag['id'])
-                tags.remove(tag)
-
-    def _set_tags(self, tags_tags, session):
-        if not session:
-            return plugin.PluginError('session is None')
-        if not tags_tags:
-            return plugin.PluginError('tags_tags is None')
-        self._remove_blacklist_tags(tags_tags)
-        tags_list = sorted(tags_tags, key=lambda tag: tag['parentid'] if 'parentid' in tag.attrs else 0)
-        for tag in tags_list:
-            name = tag.find('name')
-            name = name.string if name else ''
-            db_tag = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == int(tag['id'])).first()
-            if not db_tag:
-                LOG.debug('%s is not in the tag list, adding', name)
-                db_tag = AnimeGenre(int(tag['id']), name)
-            tag_parent_id = int(tag['parentid']) if 'parentid' in tag.attrs else 0
-            if db_tag.parent_id is None and tag_parent_id and tag_parent_id not in default_tag_blacklist.keys():
-                parent_tag = session.query(AnimeGenre).filter(AnimeGenre.anidb_id == tag_parent_id).first()
-                if parent_tag:
-                    db_tag.parent_id = parent_tag.id_
-                else:
-                    LOG.trace('Genre %s parent genre, %s is not in the database yet. When it is found, it will be added', name, tag_parent_id)
-                series_genre = session.query(AnimeGenreAssociation).filter(
-                        AnimeGenreAssociation.anidb_id == self.series.id_,
-                        AnimeGenreAssociation.genre_id == tag.id_).first()
-                if not series_genre:
-                    series_genre = AnimeGenreAssociation(genre=tag)
-                    self.series.genres.append(series_genre)
-                if series_genre != int(tag['weight']):
-                    series_genre.genre_weight = int(tag['weight'])
