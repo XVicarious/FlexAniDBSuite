@@ -8,7 +8,7 @@ from flexget import plugin
 from flexget.event import event
 from flexget.utils.database import with_session
 
-from .fadbs_lookup import Anime, AnimeTitle
+from .util.api_anidb import Anime, AnimeTitle
 
 PLUGIN_ID = 'fadbs_est_release'
 

@@ -177,7 +177,7 @@ class AnimeTitle(Base):
         self.parent_id = parent
 
 
-class AnimeLangauge(Base):
+class AnimeLanguage(Base):
     """Language names for anime (ex: jp, en, x-jat)."""
 
     __tablename__ = 'anidb_languages'

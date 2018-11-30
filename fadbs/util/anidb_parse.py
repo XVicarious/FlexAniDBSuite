@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from flexget import plugin
 from flexget.manager import manager
 from flexget.utils.database import with_session
+from flexget.utils.requests import Session, TimedLimiter
 
 from .anidb_cache import cached_anidb
 from .anidb_parsing_interface import AnidbParserTemplate
@@ -14,6 +15,11 @@ from .api_anidb import Anime
 PLUGIN_ID = 'anidb_parser'
 
 LOG = logging.getLogger(PLUGIN_ID)
+
+requests = Session()
+requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
+
+requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
 
 class AnidbParser(AnidbParserTemplate, AnidbParserTags):
@@ -56,6 +62,21 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
                 if not banned:
                     os.remove(self.anidb_ban_file)
         return banned, banned_until
+
+    def request_anime(self):
+        if self.is_banned[0]:
+            raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
+        params = self.anidb_params.copy()
+        params.update(request='anime', aid=self.anidb_id)
+        page = requests.get(self.anidb_endpoint, params=params)
+        page = page.text
+        if '500' in page and 'banned' in page.lower():
+            time_now = datetime.now().timestamp()
+            with open(self.anidb_ban_file, 'w') as aniban:
+                aniban.write(str(time_now))
+                aniban.close()
+            raise plugin.PluginError('Banned from AniDB until {0}'.format(time_now + timedelta(1)))
+        return page
 
     @with_session
     @cached_anidb

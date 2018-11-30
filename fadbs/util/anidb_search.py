@@ -35,11 +35,9 @@ class AnidbSearch(object):
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
     xml_cache = {
         'path': os.path.join(manager.config_base, 'anime-titles.xml'),
+        'exists': False,
+        'modified': None,
     }
-    xml_cache.update({
-        'exists': os.path.exists(xml_cache['path']),
-        'modified': datetime.fromtimestamp(os.path.getmtime(xml_cache['path'])),
-    })
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
 
     particle_words = {
@@ -50,6 +48,10 @@ class AnidbSearch(object):
 
     def __init__(self):
         self.debug = False
+        self.xml_cache['exists'] = os.path.exists(self.xml_cache['path'])
+        if self.xml_cache['exists']:
+            mtime = os.path.getmtime(self.xml_cache['path'])
+            self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
         with open(self.xml_cache['path'], 'r') as soup_file:
             self.soup = get_soup(soup_file, parser='lxml-xml')
 
@@ -57,8 +59,11 @@ class AnidbSearch(object):
     def __load_xml_to_database(self, session=None):
 
         last = session.query(Anime).order_by(Anime.anidb_id.desc()).first()
+        log.debug('The last anidb_id we have is for entry %s', last)
         if last:
             last = last.anidb_id
+        else:
+            last = 0
         animes = self.soup.find_all('anime')
         for anime in animes:
             anidb_id = int(anime['aid'])
@@ -109,7 +114,7 @@ class AnidbSearch(object):
     def lookup_series(self, name=None, anidb_id=None, only_cached=False, session=None):
         """Lookup an Anime series and return it."""
         diff = datetime.now() - self.xml_cache['modified']
-        if not self.xml_cache['exists'] or diff > timedelta(1):
+        if not self.xml_cache['exists'] or diff > timedelta(days=1):
             log_mess = 'Cache is expired, %s' if self.xml_cache['exists'] else 'Cache does not exist, %s'
             log.info(log_mess, 'downloading now.')
             self.__download_anidb_titles()

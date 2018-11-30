@@ -5,7 +5,8 @@ from typing import Type
 
 from flexget import plugin
 
-from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeLanguage, AnimeTitle
+from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeTitle
+from .api_anidb import AnimeLanguage
 
 PLUGIN_ID = 'anidb_parser'
 
