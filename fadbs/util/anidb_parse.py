@@ -1,3 +1,4 @@
+"""In charge of fetching and parsing anime from AniDB."""
 import logging
 import os
 from datetime import datetime, timedelta
@@ -43,9 +44,13 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
     anidb_cache_time = timedelta(days=1)
     anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
-    def __init__(self, anidb_id):
+    @with_session
+    def __init__(self, anidb_id, session=None):
+        """Initialize AnidbParser."""
+        self.session = session
         self.anidb_id = anidb_id
         self.anidb_anime_params.update(aid=anidb_id)
+        self._get_anime()
 
     @property
     def is_banned(self):
@@ -64,6 +69,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
         return banned, banned_until
 
     def request_anime(self):
+        """Request an anime from AniDB."""
         if self.is_banned[0]:
             raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
         params = self.anidb_params.copy()
@@ -78,9 +84,14 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             raise plugin.PluginError('Banned from AniDB until {0}'.format(time_now + timedelta(1)))
         return page
 
-    @with_session
+    def _get_anime(self):
+        series = self.session.query(Anime).filter(Anime.anidb_id == self.anidb_id)
+        self.series = series.first()
+        if not self.series:
+            raise plugin.PluginError('Anime not found? When is the last time the cache was updated?')
+
     @cached_anidb
-    def parse(self, soup=None, session=None):
+    def parse(self, soup=None):
         """Parse the soup and shove it into the database."""
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')
@@ -90,52 +101,46 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
         if not root:
             raise plugin.PluginError('No anime was found in the soup, did we get passed somethign bad?')
 
-        series = session.query(Anime).filter(Anime.anidb_id == self.anidb_id).first()
-        if not series:
-            series = Anime()
-            series.anidb_id = self.anidb_id
-
         series_type = root.find('type')
         if series_type:
-            series.series_type = series_type.string
+            self.series.series_type = series_type.string
 
         num_episodes = root.find('episodecount')
         if not num_episodes:
-            series.num_episodes = 0
-        series.num_episodes = int(num_episodes)
+            self.series.num_episodes = 0
+        self.series.num_episodes = int(num_episodes.string)
 
         self._set_dates(root.find('startdate'), root.find('enddate'))
 
-        self._set_titles(root.find('titles'), session)
+        self._set_titles(root.find('titles'))
 
         # todo: similar, related
 
         official_url = root.find('url')
         if official_url:
-            series.url = official_url.string
+            self.series.url = official_url.string
 
         # todo: creators
 
         description = root.find('description')
         if description:
-            series.description = description.string
+            self.series.description = description.string
 
         ratings = root.find('ratings')
         if ratings:
             permanent = ratings.find('permanent')
             if permanent:
-                series.permanent_rating = float(permanent.string)
+                self.series.permanent_rating = float(permanent.string)
                 # todo: permanent votes
             mean = ratings.find('temporary')
             if mean:
-                series.mean_rating = float(mean.string)
+                self.series.mean_rating = float(mean.string)
                 # todo: mean votes
 
-        self._set_tags(root.find('tags'), session)
+        self._set_tags(root.find('tags'))
 
         # todo: characters
 
-        self._set_episodes(root.find('episodes'), session)
+        self._set_episodes(root.find('episodes'))
 
-        session.add(self.series)
-        session.commit()
+        self.session.add(self.series)

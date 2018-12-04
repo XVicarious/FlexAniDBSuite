@@ -1,8 +1,5 @@
 """AniDB Database Table Things."""
-from __future__ import unicode_literals, division, absolute_import
-
 import logging
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
@@ -71,16 +68,15 @@ class Anime(Base):
     def expired(self):
         """Check if we can download a new cache from AniDB, 24 hour hard limit."""
         if self.updated is None:
-            log.debug('updated is None: %s', self)
             return True
         tdelta = datetime.utcnow() - self.updated
-        if tdelta >= timedelta(days=1):
+        if tdelta >= timedelta(1):
             return True
-        log.info('This entry will expire in: %s seconds', timedelta(days=1) - tdelta)
+        log.info('This entry will expire in: %s seconds', timedelta(1) - tdelta)
         return False
 
     def __repr__(self):
-        return '<Anime(name={0},type={1},year={2})>'.format(self.title_main, self.series_type, 0)
+        return '<Anime(name={0},type={1},year={2})>'.format(self.title_main, self.series_type, self.year)
 
 
 class AnimeGenreAssociation(Base):
