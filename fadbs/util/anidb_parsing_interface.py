@@ -72,12 +72,12 @@ class AnidbParserTemplate():
         if not episodes_tag:
             raise plugin.PluginError('episodes_tag was None')
         series_id = self.series.id_
-        for episode in episodes_tag:
+        for episode in episodes_tag.find_all('episode'):
             db_episode = self.session.query(AnimeEpisode)
             db_episode = db_episode.filter(AnimeEpisode.anidb_id == episode['id']).first()
             if not db_episode:
-                rating = self._get_list_tag(episode.find('rating'))
-                number = self._get_list_tag(episode.find('epno'))
+                rating = self._get_list_tag(episode.find('rating'), 'votes')
+                number = self._get_list_tag(episode.find('epno'), 'type')
                 length = episode.find('length').string if episode.find('length') else None
                 airdate = episode.find('airdate')
                 if airdate:
@@ -86,6 +86,6 @@ class AnidbParserTemplate():
                 episode_id = db_episode.id_
                 for episode_title in episode.find_all('title'):
                     lang = self._find_lang(episode_title['xml:lang'])
-                    anime_episode_title = AnimeEpisodeTitle(episode_id, episode_title['name'], lang.name)
+                    anime_episode_title = AnimeEpisodeTitle(episode_id, episode_title.string, lang.name)
                     db_episode.titles.append(anime_episode_title)
                 self.series.episodes.append(db_episode)

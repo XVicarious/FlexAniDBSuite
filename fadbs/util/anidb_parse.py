@@ -1,12 +1,14 @@
 """In charge of fetching and parsing anime from AniDB."""
+import functools
 import logging
 import os
 from datetime import datetime, timedelta
 
 from flexget import plugin
 from flexget.manager import manager
-from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session as SASession
 
 from .anidb_cache import cached_anidb
 from .anidb_parsing_interface import AnidbParserTemplate
@@ -44,13 +46,18 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
     anidb_cache_time = timedelta(days=1)
     anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
-    @with_session
-    def __init__(self, anidb_id, session=None):
+    def __init__(self, anidb_id):
         """Initialize AnidbParser."""
-        self.session = session
+        session = sessionmaker(class_=SASession)
+        session.configure(bind=manager.engine, expire_on_commit=False)
+        self.session = session()
         self.anidb_id = anidb_id
         self.anidb_anime_params.update(aid=anidb_id)
         self._get_anime()
+
+    def __del__(self):
+        LOG.info('YEETING %s', self)
+        self.session.close()
 
     @property
     def is_banned(self):
