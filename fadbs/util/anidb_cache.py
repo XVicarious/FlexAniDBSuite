@@ -1,7 +1,7 @@
-from __future__ import unicode_literals, division, absolute_import
-
-import os
+"""Handles cached files from AniDB."""
 import logging
+import os
+
 from flexget.manager import manager
 from flexget.utils.soup import get_soup
 

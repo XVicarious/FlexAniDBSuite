@@ -2,3 +2,5 @@
 from . import api_anidb
 from .anidb_search import AnidbSearch
 from .anidb_parse import AnidbParser
+
+ANIDB_SEARCH = AnidbSearch()

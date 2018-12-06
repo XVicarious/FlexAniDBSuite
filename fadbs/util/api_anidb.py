@@ -1,9 +1,6 @@
 """AniDB Database Table Things."""
-from __future__ import unicode_literals, division, absolute_import
-
 import logging
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
@@ -11,8 +8,6 @@ from sqlalchemy.schema import ForeignKey, Index
 
 from flexget import db_schema
 from flexget.db_schema import UpgradeImpossible
-
-from .anidb_parse import AnidbParser
 
 SCHEMA_VER = 1
 
@@ -73,16 +68,15 @@ class Anime(Base):
     def expired(self):
         """Check if we can download a new cache from AniDB, 24 hour hard limit."""
         if self.updated is None:
-            log.debug('updated is None: %s', self)
             return True
         tdelta = datetime.utcnow() - self.updated
-        if tdelta.total_seconds() >= AnidbParser.RESOURCE_MIN_CACHE:
+        if tdelta >= timedelta(1):
             return True
-        log.info('This entry will expire in: %s seconds', AnidbParser.RESOURCE_MIN_CACHE - tdelta.total_seconds())
+        log.info('This entry will expire in: %s seconds', timedelta(1) - tdelta)
         return False
 
     def __repr__(self):
-        return '<Anime(name={0},type={1},year={2})>'.format(self.title_main, self.series_type, 0)
+        return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
 
 
 class AnimeGenreAssociation(Base):
@@ -179,7 +173,7 @@ class AnimeTitle(Base):
         self.parent_id = parent
 
 
-class AnimeLangauge(Base):
+class AnimeLanguage(Base):
     """Language names for anime (ex: jp, en, x-jat)."""
 
     __tablename__ = 'anidb_languages'
