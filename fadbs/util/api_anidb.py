@@ -76,7 +76,7 @@ class Anime(Base):
         return False
 
     def __repr__(self):
-        return '<Anime(name={0},type={1},year={2})>'.format(self.title_main, self.series_type, self.year)
+        return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
 
 
 class AnimeGenreAssociation(Base):

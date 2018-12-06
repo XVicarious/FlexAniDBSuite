@@ -1,7 +1,5 @@
-from __future__ import unicode_literals, division, absolute_import
-
+"""Class responsible for looking up a series and lazy loading the values."""
 import logging
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 
 from flexget import plugin
 from flexget.event import event
@@ -87,9 +85,11 @@ class FadbsLookup(object):
 
     @plugin.internet(log)
     def lookup(self, entry):
-
+        """Lookup series, and update the entry."""
         try:
-            series = ANIDB_SEARCH.lookup_series(anidb_id=entry.get('anidb_id', eval_lazy=False), name=entry.get('series_name'))
+            anidb_id = entry.get('anidb_id', eval_lazy=False)
+            series_name = entry.get('series_name')
+            series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
         except plugin.PluginError as err:
             raise plugin.PluginError(err)
 

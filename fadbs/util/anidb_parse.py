@@ -1,14 +1,12 @@
 """In charge of fetching and parsing anime from AniDB."""
-import functools
 import logging
 import os
 from datetime import datetime, timedelta
 
 from flexget import plugin
 from flexget.manager import manager
-from flexget.utils.requests import Session, TimedLimiter
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import Session as SASession
+from flexget.utils import requests
+from sqlalchemy import orm as sa_orm
 
 from .anidb_cache import cached_anidb
 from .anidb_parsing_interface import AnidbParserTemplate
@@ -19,10 +17,10 @@ PLUGIN_ID = 'anidb_parser'
 
 LOG = logging.getLogger(PLUGIN_ID)
 
-requests = Session()
+requests = requests.Session()
 requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
-requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
+requests.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
 
 
 class AnidbParser(AnidbParserTemplate, AnidbParserTags):
@@ -48,7 +46,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
 
     def __init__(self, anidb_id):
         """Initialize AnidbParser."""
-        session = sessionmaker(class_=SASession)
+        session = sa_orm.sessionmaker(class_=sa_orm.Session)
         session.configure(bind=manager.engine, expire_on_commit=False)
         self.session = session()
         self.anidb_id = anidb_id
