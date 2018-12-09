@@ -1,10 +1,7 @@
-from __future__ import unicode_literals, division, absolute_import
-
 import difflib
 import logging
 import os
 import re
-from builtins import *  # noqa pylint: disable=unused-import, redefined-builtin
 from datetime import datetime, timedelta
 
 from flexget import plugin
