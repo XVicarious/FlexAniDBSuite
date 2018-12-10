@@ -1,15 +1,18 @@
 """Class responsible for looking up a series and lazy loading the values."""
 import logging
+from typing import Type
 
 from flexget import plugin
 from flexget.event import event
+from flexget.logger import FlexGetLogger
 from flexget.utils.log import log_once
 
 from .util import ANIDB_SEARCH
+from .util.api_anidb import AnimeEpisode
 
 PLUGIN_ID = 'fadbs_lookup'
 
-log = logging.getLogger(PLUGIN_ID)
+log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsLookup(object):
@@ -43,7 +46,7 @@ class FadbsLookup(object):
         'anidb_rating': 'permanent_rating',
         'anidb_mean_rating': 'mean_rating',
         'anidb_tags': lambda series: dict(
-            (genre.genre.anidb_id, [genre.genre.name, genre.genre_weight]) for genre in series.genres),
+            {genre.genre.anidb_id: [genre.genre.name, genre.genre_weight]} for genre in series.genres),
         'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes),
         'anidb_year': 'year',
         'anidb_season': 'season'}
@@ -58,6 +61,7 @@ class FadbsLookup(object):
             'anidb_episode_type': 'ep_type',
             'anidb_episode_airdate': 'airdate',
             'anidb_episode_rating': 'rating',
+            'anidb_episode_titles': 'titles',
             'anidb_episode_votes': 'votes'}
 
     schema = {'type': 'boolean'}
@@ -89,14 +93,10 @@ class FadbsLookup(object):
         try:
             anidb_id = entry.get('anidb_id', eval_lazy=False)
             series_name = entry.get('series_name')
+            log.verbose('%s: %s', anidb_id, series_name)
             series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
         except plugin.PluginError as err:
             raise plugin.PluginError(err)
-
-        if series and not series.expired:
-            log.debug('series exists and it is not expired')  # todo: TEMP
-            entry.update_using_map(self.field_map, series)
-            return
 
         # There is a whole part about expired entries here.
         # Possibly increase the default cache time to a week,
@@ -104,8 +104,15 @@ class FadbsLookup(object):
         # a minimum of 24 hours due to AniDB's policies...
 
         # todo: trace log attributes?
-
-        entry.update_using_map(self.field_map, series)
+        if series:
+            entry.update_using_map(self.field_map, series)
+            if 'series_id' in entry:
+                episode = Type[AnimeEpisode]
+                for episode_entry in series.episodes:
+                    if episode_entry.number == entry['series_id']:
+                        episode = episode_entry
+                        break
+                entry.update_using_map(self.episode_field_map, episode)
 
 
 @event('plugin.register')

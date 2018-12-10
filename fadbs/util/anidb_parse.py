@@ -17,10 +17,10 @@ PLUGIN_ID = 'anidb_parser'
 
 LOG = logging.getLogger(PLUGIN_ID)
 
-requests = requests.Session()
-requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
+requests_ = requests.Session()
+requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
-requests.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
+requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
 
 
 class AnidbParser(AnidbParserTemplate, AnidbParserTags):
@@ -79,7 +79,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
         params = self.anidb_params.copy()
         params.update(request='anime', aid=self.anidb_id)
-        page = requests.get(self.anidb_endpoint, params=params)
+        page = requests_.get(self.anidb_endpoint, params=params)
         page = page.text
         if '500' in page and 'banned' in page.lower():
             time_now = datetime.now().timestamp()

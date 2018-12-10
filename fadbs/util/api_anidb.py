@@ -72,7 +72,7 @@ class Anime(Base):
         tdelta = datetime.utcnow() - self.updated
         if tdelta >= timedelta(1):
             return True
-        log.info('This entry will expire in: %s seconds', timedelta(1) - tdelta)
+        log.debug('This entry will expire in: %s seconds', timedelta(1) - tdelta)
         return False
 
     def __repr__(self):
