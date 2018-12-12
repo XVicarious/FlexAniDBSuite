@@ -1,17 +1,24 @@
-import fuzzywuzzy
 import logging
 import os
 import re
+
 from datetime import datetime, timedelta
-from typing import Dict, List, Type
+
+from fuzzywuzzy import process as fw_process
 
 from flexget import plugin
+from flexget.logger import FlexGetLogger
 from flexget.manager import manager
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
 
-from .api_anidb import Anime, AnimeTitle, AnimeLanguage
+from http import HTTPStatus
+from typing import Dict, List, Type
+
+from .. import BASE_PATH
+
+from .api_anidb import Anime, AnimeTitle, AnimeLanguage, AnimeGenre
 from .anidb_parse import AnidbParser
 
 PLUGIN_ID = 'anidb_search'
@@ -19,7 +26,7 @@ PLUGIN_ID = 'anidb_search'
 CLIENT_STR = 'fadbs'
 CLIENT_VER = 1
 
-log = logging.getLogger(PLUGIN_ID)
+log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 requests = Session()
 requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
@@ -30,6 +37,8 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 class AnidbSearch(object):
     """Search for an anime's id."""
 
+    log.info(BASE_PATH)
+
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
     xml_cache = {
         'path': os.path.join(manager.config_base, 'anime-titles.xml'),
@@ -37,7 +46,7 @@ class AnidbSearch(object):
         'modified': datetime.fromtimestamp(0),
     }
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
-
+    anidb_json = BASE_PATH / 'anime-titles.json'
     particle_words = {
         'x-jat': {
             'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',
@@ -81,8 +90,8 @@ class AnidbSearch(object):
                 if not lang:
                     lang = AnimeLanguage(title[1])
                     session.add(lang)
-                title = AnimeTitle(title[0], lang.name, title[2])
-                db_anime.titles.add(title)
+                title = AnimeTitle(title[0], lang.name, title[2], parent=db_anime.id_)
+                db_anime.titles.append(title)
             session.add(db_anime)
         session.commit()
 
@@ -116,7 +125,7 @@ class AnidbSearch(object):
 
     def __download_anidb_titles(self):
         anidb_titles = requests.get(self.anidb_title_dump_url)
-        if anidb_titles.status_code >= 400:
+        if anidb_titles.status_code >= HTTPStatus.BAD_REQUEST:
             raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
         if os.path.exists(self.xml_cache['path']):
             os.rename(self.xml_cache['path'], self.xml_cache['path'] + '.old')
@@ -144,29 +153,40 @@ class AnidbSearch(object):
             anidb_id = self.last_lookup['anidb_id']
 
         series = Type[Anime]
+        join_titles = True
 
         if anidb_id:
-            log.debug('AniDB id is present and is %s.', anidb_id)
-            query = session.query(Anime).join(Anime.genres)
+            log.verbose('AniDB id is present and is %s.', anidb_id)
+            query = session.query(Anime)#.join(AnimeGenre)
             log.debug(query)
             if join_titles:
                 log.trace('Joining titles')
-                query = query.join(Anime.titles)
+                query = query.join(AnimeTitle)
                 log.debug(query)
             if join_episodes:
                 log.trace('Joining episodes')
-                query = query.join(Anime.episodes)
+                query = query#.join(Anime.episodes)
                 log.debug(query)
+            log.info('Anime anidb_id == %s', anidb_id)
             query = query.filter(Anime.anidb_id == anidb_id)
             log.debug(query)
             series = query.first()
-            log.debug(series)
+            log.info(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
-            query = session.query(Anime).join(Anime.titles).join(Anime.genres)
-            if join_episodes:
-                query = query.join(Anime.episodes)
-            series = query.filter(Anime.titles == name).first()
+            #query = session.query(Anime).join(Anime.titles).join(Anime.genres)
+            #if join_episodes:
+            #    query = query.join(Anime.episodes)
+            #series = None #query.filter(Anime.titles).first()
+            if not series:
+                titles = session.query(AnimeTitle).all()
+                get_title = lambda title: title.name if isinstance(title, AnimeTitle) else title
+                matches = fw_process.extract(name, titles, processor=get_title)
+                matches = sorted(matches, key=lambda title: title[1], reverse=True)
+                series_id = matches.pop()[0].parent_id
+                log.info(series_id)
+                series = session.query(Anime).filter(Anime.id_ == series_id).first()
+                log.info(series)
 
         if series:
             log.debug('%s', series)

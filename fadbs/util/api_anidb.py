@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
@@ -41,7 +42,7 @@ class Anime(Base):
     num_episodes = Column(Integer)
     start_date = Column(Date)
     end_date = Column(Date)
-    titles = relation('AnimeTitle')
+    titles = relationship('AnimeTitle', backref='anidb_series')
     # todo: related = relationship('AnimeRelatedAssociation')
     # todo: similar anime, many to many?
     url = Column(String)
@@ -49,13 +50,15 @@ class Anime(Base):
     description = Column(Text)
     permanent_rating = Column(Float)
     mean_rating = Column(Float)
-    genres = relationship('AnimeGenreAssociation')
+    _genres = relationship('AnimeGenreAssociation', back_populates='anime')
     # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
-    episodes = relation('AnimeEpisode', secondary=episodes_table, backref='series')
+    episodes = relation('AnimeEpisode', secondary=episodes_table, backref='anidb_series')
     year = Column(Integer)
     season = Column(String)
 
     updated = Column(DateTime)
+
+    genres = association_proxy('_genres', 'anidb_genres')
 
     @property
     def title_main(self):
@@ -84,10 +87,16 @@ class AnimeGenreAssociation(Base):
 
     __tablename__ = 'anidb_genreassociation'
 
-    anidb_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
+    anime_id = Column(Integer, ForeignKey('anidb_series.id'), primary_key=True)
     genre_id = Column(Integer, ForeignKey('anidb_genres.id'), primary_key=True)
-    genre_weight = Column(Integer)
-    genre = relationship('AnimeGenre')
+
+    weight = Column(Integer)
+    genre = relationship('AnimeGenre', back_populates='anime')
+    anime = relationship('Anime', back_populates='_genres')
+
+    def __init__(self, genre, weight):
+        self.genre = genre
+        self.weight = weight
 
 
 class AnimeGenre(Base):
@@ -97,13 +106,12 @@ class AnimeGenre(Base):
 
     id_ = Column('id', Integer, primary_key=True)
     anidb_id = Column(Integer, unique=True)
-    parent_id = Column(Integer, ForeignKey('anidb_genres.id'))
     name = Column(String)
+    anime = relationship('AnimeGenreAssociation', back_populates='genre')
 
     def __init__(self, anidb_id, name):
         self.anidb_id = anidb_id
         self.name = name
-        self.parent_id = None
 
 
 class AnimeCreatorAssociation(Base):
