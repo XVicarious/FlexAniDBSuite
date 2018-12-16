@@ -66,8 +66,8 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             with open(self.anidb_ban_file, 'r') as aniban:
                 tmp_aniban = aniban.read()
                 if tmp_aniban:
-                    banned = datetime.now() - banned_until < timedelta(days=1)
                     banned_until = datetime.fromtimestamp(float(tmp_aniban))
+                    banned = datetime.now() - banned_until < timedelta(days=1)
                     aniban.close()
                 if not banned:
                     os.remove(self.anidb_ban_file)
@@ -86,12 +86,13 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             with open(self.anidb_ban_file, 'w') as aniban:
                 aniban.write(str(time_now))
                 aniban.close()
-            raise plugin.PluginError('Banned from AniDB until {0}'.format(time_now + timedelta(1)))
+            banned_until = datetime.fromtimestamp(time_now) + timedelta(1)
+            raise plugin.PluginError('Banned from AniDB until {0}'.format(banned_until))
         return page
 
     def _get_anime(self):
-        series = self.session.query(Anime).filter(Anime.anidb_id == self.anidb_id)
-        self.series = series.first()
+        self.series = self.session.query(Anime).filter(
+                Anime.anidb_id == self.anidb_id).first()
         if not self.series:
             raise plugin.PluginError('Anime not found? When is the last time the cache was updated?')
 
@@ -100,52 +101,55 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
         """Parse the soup and shove it into the database."""
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')
+        
+        with self.session.no_autoflush:
+            root = soup.find('anime')
 
-        root = soup.find('anime')
+            if not root:
+                raise plugin.PluginError('No anime was found in the soup, did we get passed somethign bad?')
 
-        if not root:
-            raise plugin.PluginError('No anime was found in the soup, did we get passed somethign bad?')
+            series_type = root.find('type')
+            if series_type:
+                self.series.series_type = series_type.string
 
-        series_type = root.find('type')
-        if series_type:
-            self.series.series_type = series_type.string
+            num_episodes = root.find('episodecount')
+            if not num_episodes:
+                self.series.num_episodes = 0
+            self.series.num_episodes = int(num_episodes.string)
 
-        num_episodes = root.find('episodecount')
-        if not num_episodes:
-            self.series.num_episodes = 0
-        self.series.num_episodes = int(num_episodes.string)
+            self._set_dates(root.find('startdate'), root.find('enddate'))
 
-        self._set_dates(root.find('startdate'), root.find('enddate'))
+            self._set_titles(root.find('titles'))
 
-        self._set_titles(root.find('titles'))
+            # todo: similar, related
 
-        # todo: similar, related
+            official_url = root.find('url')
+            if official_url:
+                self.series.url = official_url.string
 
-        official_url = root.find('url')
-        if official_url:
-            self.series.url = official_url.string
+            # todo: creators
 
-        # todo: creators
+            description = root.find('description')
+            if description:
+                self.series.description = description.string
 
-        description = root.find('description')
-        if description:
-            self.series.description = description.string
+            ratings = root.find('ratings')
+            if ratings:
+                permanent = ratings.find('permanent')
+                if permanent:
+                    self.series.permanent_rating = float(permanent.string)
+                    # todo: permanent votes
+                mean = ratings.find('temporary')
+                if mean:
+                    self.series.mean_rating = float(mean.string)
+                    # todo: mean votes
 
-        ratings = root.find('ratings')
-        if ratings:
-            permanent = ratings.find('permanent')
-            if permanent:
-                self.series.permanent_rating = float(permanent.string)
-                # todo: permanent votes
-            mean = ratings.find('temporary')
-            if mean:
-                self.series.mean_rating = float(mean.string)
-                # todo: mean votes
+            self._set_tags(root.find('tags'))
 
-        self._set_tags(root.find('tags'))
+            # todo: characters
 
-        # todo: characters
+            self._set_episodes(root.find('episodes'))
 
-        self._set_episodes(root.find('episodes'))
+            self.session.add(self.series)
 
-        self.session.add(self.series)
+        self.session.commit()

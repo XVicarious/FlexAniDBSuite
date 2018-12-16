@@ -18,7 +18,7 @@ from typing import Dict, List, Type
 
 from .. import BASE_PATH
 
-from .api_anidb import Anime, AnimeTitle, AnimeLanguage, AnimeGenre
+from .api_anidb import Anime, AnimeTitle, AnimeLanguage
 from .anidb_parse import AnidbParser
 
 PLUGIN_ID = 'anidb_search'
@@ -36,8 +36,6 @@ requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
 class AnidbSearch(object):
     """Search for an anime's id."""
-
-    log.info(BASE_PATH)
 
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
     xml_cache = {
@@ -132,13 +130,14 @@ class AnidbSearch(object):
         with open(self.xml_cache['path'], 'w') as xml_file:
             xml_file.write(anidb_titles.text)
             xml_file.close()
-        new_mtime = os.path.getmtime(self.xml_cache['path'])
-        if self.debug:
-            new_mtime = datetime.now()
-        self.xml_cache['modified'] = datetime.fromtimestamp(new_mtime)
+        if self.debug: # todo: this is dumb here, move it
+            self.xml_cache['modified'] = datetime.now()
+            return
+        mtime = os.path.getmtime(self.xml_cache['path'])
+        self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
-    def lookup_series(self, name=None, anidb_id=None, join_titles=False, join_episodes=False, only_cached=False, session=None):
+    def lookup_series(self, name=None, anidb_id=None, join_genres=False, join_episodes=False, only_cached=False, session=None):
         """Lookup an Anime series and return it."""
         self._make_xml_junk()
         # If we don't have an id or a name, we cannot find anything
@@ -153,23 +152,18 @@ class AnidbSearch(object):
             anidb_id = self.last_lookup['anidb_id']
 
         series = Type[Anime]
-        join_titles = True
 
         if anidb_id:
             log.verbose('AniDB id is present and is %s.', anidb_id)
-            query = session.query(Anime)#.join(AnimeGenre)
-            log.debug(query)
-            if join_titles:
-                log.trace('Joining titles')
-                query = query.join(AnimeTitle)
-                log.debug(query)
+            query = session.query(Anime)
+            if join_genres:
+                log.trace('Joining genres')
+                query = query.join(*Anime.genres.attr)
             if join_episodes:
                 log.trace('Joining episodes')
-                query = query#.join(Anime.episodes)
-                log.debug(query)
+                query = query.join(Anime.episodes)
             log.info('Anime anidb_id == %s', anidb_id)
             query = query.filter(Anime.anidb_id == anidb_id)
-            log.debug(query)
             series = query.first()
             log.info(series)
         else:
@@ -180,7 +174,7 @@ class AnidbSearch(object):
             #series = None #query.filter(Anime.titles).first()
             if not series:
                 titles = session.query(AnimeTitle).all()
-                get_title = lambda title: title.name if isinstance(title, AnimeTitle) else title
+                get_title = lambda title: title if isinstance(title, str) else title.name
                 matches = fw_process.extract(name, titles, processor=get_title)
                 matches = sorted(matches, key=lambda title: title[1], reverse=True)
                 series_id = matches.pop()[0].parent_id

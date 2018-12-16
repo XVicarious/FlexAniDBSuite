@@ -2,10 +2,11 @@
 import logging
 import os
 
+from flexget.logger import FlexGetLogger
 from flexget.manager import manager
 from flexget.utils.soup import get_soup
 
-log = logging.getLogger('anidb_cache')
+log: FlexGetLogger = logging.getLogger('anidb_cache')
 
 ANIDB_CACHE = '.anidb_cache'
 

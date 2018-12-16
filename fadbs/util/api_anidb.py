@@ -50,15 +50,13 @@ class Anime(Base):
     description = Column(Text)
     permanent_rating = Column(Float)
     mean_rating = Column(Float)
-    _genres = relationship('AnimeGenreAssociation', back_populates='anime')
+    genres = relationship('AnimeGenreAssociation', back_populates='anime')
     # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
     episodes = relation('AnimeEpisode', secondary=episodes_table, backref='anidb_series')
     year = Column(Integer)
     season = Column(String)
 
     updated = Column(DateTime)
-
-    genres = association_proxy('_genres', 'anidb_genres')
 
     @property
     def title_main(self):
@@ -92,7 +90,7 @@ class AnimeGenreAssociation(Base):
 
     weight = Column(Integer)
     genre = relationship('AnimeGenre', back_populates='anime')
-    anime = relationship('Anime', back_populates='_genres')
+    anime = relationship('Anime', back_populates='genres')
 
     def __init__(self, genre, weight):
         self.genre = genre
@@ -108,6 +106,8 @@ class AnimeGenre(Base):
     anidb_id = Column(Integer, unique=True)
     name = Column(String)
     anime = relationship('AnimeGenreAssociation', back_populates='genre')
+    children = relationship('AnimeGenre')
+    parent_id = Column(Integer, ForeignKey('anidb_genres.anidb_id'))
 
     def __init__(self, anidb_id, name):
         self.anidb_id = anidb_id

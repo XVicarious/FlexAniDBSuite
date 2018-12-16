@@ -5,6 +5,7 @@ from typing import Type
 from flexget import plugin
 from flexget.event import event
 from flexget.logger import FlexGetLogger
+from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
 from .util import ANIDB_SEARCH
@@ -45,9 +46,10 @@ class FadbsLookup(object):
         'anidb_description': 'description',
         'anidb_rating': 'permanent_rating',
         'anidb_mean_rating': 'mean_rating',
-        'anidb_tags': lambda series: dict(
-            {genre.genre.anidb_id: [genre.genre.name, genre.genre_weight]} for genre in series.genres),
-        'anidb_episodes': lambda series: dict((episode.anidb_id, episode.number) for episode in series.episodes),
+        'anidb_tags': lambda series: {
+            genre.genre.anidb_id: [genre.genre.name, genre.weight] for genre in series.genres
+        },
+        'anidb_episodes': lambda series: {(episode.anidb_id, episode.number) for episode in series.episodes},
         'anidb_year': 'year',
         'anidb_season': 'season'}
 
@@ -88,7 +90,8 @@ class FadbsLookup(object):
         return 'anidb_id'
 
     @plugin.internet(log)
-    def lookup(self, entry):
+    @with_session
+    def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
         try:
             anidb_id = entry.get('anidb_id', eval_lazy=False)
@@ -105,6 +108,7 @@ class FadbsLookup(object):
 
         # todo: trace log attributes?
         if series:
+            session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
                 episode = Type[AnimeEpisode]
