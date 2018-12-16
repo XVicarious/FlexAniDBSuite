@@ -49,7 +49,7 @@ class FadbsLookup(object):
         'anidb_tags': lambda series: {
             genre.genre.anidb_id: [genre.genre.name, genre.weight] for genre in series.genres
         },
-        'anidb_episodes': lambda series: {(episode.anidb_id, episode.number) for episode in series.episodes},
+        'anidb_episodes': lambda series: [(episode.anidb_id, episode.number) for episode in series.episodes],
         'anidb_year': 'year',
         'anidb_season': 'season'}
 
