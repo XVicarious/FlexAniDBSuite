@@ -57,7 +57,7 @@ class FadbsLookup(object):
     # UDP gives us more episode information, I think
     # who knows. They've had 15 years to develop this api
     # and it still doesn't include a ton of things
-    episode_map = {
+    episode_field_map = {
             'anidb_episode_id': 'anidb_id',
             'anidb_episode_number': 'number',
             'anidb_episode_type': 'ep_type',
@@ -93,12 +93,17 @@ class FadbsLookup(object):
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
+
+        series = None
+
         try:
             anidb_id = entry.get('anidb_id', eval_lazy=False)
             series_name = entry.get('series_name')
             log.verbose('%s: %s', anidb_id, series_name)
             series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
         except plugin.PluginError as err:
+            raise plugin.PluginError(err)
+        except Exception as err:
             raise plugin.PluginError(err)
 
         # There is a whole part about expired entries here.
@@ -111,12 +116,13 @@ class FadbsLookup(object):
             session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
-                episode = Type[AnimeEpisode]
+                episode = None
                 for episode_entry in series.episodes:
                     if episode_entry.number == entry['series_id']:
                         episode = episode_entry
                         break
-                entry.update_using_map(self.episode_field_map, episode)
+                if episode:
+                    entry.update_using_map(self.episode_field_map, episode)
 
 
 @event('plugin.register')

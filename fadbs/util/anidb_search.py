@@ -151,7 +151,7 @@ class AnidbSearch(object):
             log.debug('setting anidb_id for %s to %s', name, self.last_lookup['anidb_id'])
             anidb_id = self.last_lookup['anidb_id']
 
-        series = Type[Anime]
+        series = None
 
         if anidb_id:
             log.verbose('AniDB id is present and is %s.', anidb_id)
@@ -168,15 +168,13 @@ class AnidbSearch(object):
             log.info(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
-            #query = session.query(Anime).join(Anime.titles).join(Anime.genres)
-            #if join_episodes:
-            #    query = query.join(Anime.episodes)
-            #series = None #query.filter(Anime.titles).first()
+            series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
                 titles = session.query(AnimeTitle).all()
                 get_title = lambda title: title if isinstance(title, str) else title.name
                 matches = fw_process.extract(name, titles, processor=get_title)
                 matches = sorted(matches, key=lambda title: title[1], reverse=True)
+                log.info(matches)
                 series_id = matches.pop()[0].parent_id
                 log.info(series_id)
                 series = session.query(Anime).filter(Anime.id_ == series_id).first()
@@ -185,9 +183,11 @@ class AnidbSearch(object):
         if series:
             log.debug('%s', series)
             if not only_cached and (series.expired is None or series.expired):
-                parser = AnidbParser(anidb_id)
+                log.debug('%s is expired, refreshing metadata', series.title_main)
+                parser = AnidbParser(series.anidb_id)
                 parser.parse()
                 series = parser.series
+                log.debug(series)
             if not anidb_id:
                 self.last_lookup.update(name=name, anidb_id=series.anidb_id)
             return series
