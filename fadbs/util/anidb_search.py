@@ -12,15 +12,16 @@ from flexget.manager import manager
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
-
+import json
 from http import HTTPStatus
-from typing import Dict, List, Type
+from typing import Dict, List, Type, Set
 
 from .. import BASE_PATH
 
+from .stucture_utils import anime_titles_diff
 from .api_anidb import Anime, AnimeTitle, AnimeLanguage
 from .anidb_parse import AnidbParser
-
+import pathlib
 PLUGIN_ID = 'anidb_search'
 
 CLIENT_STR = 'fadbs'
@@ -39,7 +40,7 @@ class AnidbSearch(object):
 
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
     xml_cache = {
-        'path': os.path.join(manager.config_base, 'anime-titles.xml'),
+        'path': BASE_PATH / 'anime-titles.xml',
         'exists': False,
         'modified': datetime.fromtimestamp(0),
     }
@@ -54,9 +55,8 @@ class AnidbSearch(object):
 
     def __init__(self):
         self.debug = False
-        self.xml_cache['exists'] = os.path.exists(self.xml_cache['path'])
-        if self.xml_cache['exists']:
-            mtime = os.path.getmtime(self.xml_cache['path'])
+        if self.xml_cache['path'].exists():
+            mtime = self.xml_cache['path'].stat().st_mtime
             self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
@@ -95,8 +95,8 @@ class AnidbSearch(object):
 
     def _make_xml_junk(self):
         expired = (datetime.now() - self.xml_cache['modified']) > timedelta(1)
-        if not self.debug and (not self.xml_cache['exists'] or expired):
-            log_mess = 'Cache is expired, %s' if self.xml_cache['exists'] else 'Cache does not exist, %s'
+        if not self.debug and (not self.xml_cache['path'].exists() or expired):
+            log_mess = 'Cache is expired, %s' if self.xml_cache['path'].exists() else 'Cache does not exist, %s'
             log.info(log_mess, 'downloading now.')
             # self.__download_anidb_titles()
             self.xml_cache['modified'] = datetime.now()
@@ -112,14 +112,19 @@ class AnidbSearch(object):
         for anime in soup.find_all('anime'):
             anidb_id = int(anime['aid'])
             log.trace('Adding %s to cache', anidb_id)
-            title_list: List = []
+            title_list: Set = {}
             for title in anime.find_all('title'):
                 log.trace('Adding %s to %s', title.string, anidb_id)
                 title_lang = title['xml:lang']
                 title_type = title['type']
-                title_list.append((title.string, title_lang, title_type))
+                title_list.add((title.string, title_lang, title_type))
             cache.update({anidb_id: title_list})
-        return cache
+        diffr: Dict = None
+        if self.anidb_json.exists():
+            old_cache = json.load(self.anidb_json)
+            diffr = anime_titles_diff(cache, old_cache)
+        json.dump(cache, self.anidb_json)
+        return diffr if diffr else cache
 
     def __download_anidb_titles(self):
         anidb_titles = requests.get(self.anidb_title_dump_url)
@@ -133,7 +138,7 @@ class AnidbSearch(object):
         if self.debug: # todo: this is dumb here, move it
             self.xml_cache['modified'] = datetime.now()
             return
-        mtime = os.path.getmtime(self.xml_cache['path'])
+        mtime = self.xml_cache['path'].stat().st_mtime
         self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
