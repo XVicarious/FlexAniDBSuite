@@ -1,8 +1,13 @@
+import json
 import logging
 import os
+import pathlib
+import pickle
 import re
-
+import sys
 from datetime import datetime, timedelta
+from http import HTTPStatus
+from typing import Dict, List, Set, Type
 
 from fuzzywuzzy import process as fw_process
 
@@ -12,16 +17,12 @@ from flexget.manager import manager
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
-import json
-from http import HTTPStatus
-from typing import Dict, List, Type, Set
 
 from .. import BASE_PATH
-
-from .stucture_utils import anime_titles_diff
-from .api_anidb import Anime, AnimeTitle, AnimeLanguage
 from .anidb_parse import AnidbParser
-import pathlib
+from .api_anidb import Anime, AnimeLanguage, AnimeTitle
+from .stucture_utils import anime_titles_diff
+
 PLUGIN_ID = 'anidb_search'
 
 CLIENT_STR = 'fadbs'
@@ -34,6 +35,7 @@ requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
 requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
+sys.setrecursionlimit(10000)
 
 class AnidbSearch(object):
     """Search for an anime's id."""
@@ -112,7 +114,7 @@ class AnidbSearch(object):
         for anime in soup.find_all('anime'):
             anidb_id = int(anime['aid'])
             log.trace('Adding %s to cache', anidb_id)
-            title_list: Set = {}
+            title_list = set()
             for title in anime.find_all('title'):
                 log.trace('Adding %s to %s', title.string, anidb_id)
                 title_lang = title['xml:lang']
@@ -121,9 +123,13 @@ class AnidbSearch(object):
             cache.update({anidb_id: title_list})
         diffr: Dict = None
         if self.anidb_json.exists():
-            old_cache = json.load(self.anidb_json)
+            log.debug('An old cached dict exists, comparing with the new one')
+            old_cache = pickle.load(open(self.anidb_json, 'r'))
             diffr = anime_titles_diff(cache, old_cache)
-        json.dump(cache, self.anidb_json)
+        log.debug('Saving the dict as a pickle')
+        with open(self.anidb_json, 'w') as json_cache:
+            pickle.dump(cache, json_cache)
+            log.debug('Pickled!')
         return diffr if diffr else cache
 
     def __download_anidb_titles(self):
@@ -174,12 +180,14 @@ class AnidbSearch(object):
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
+            log.info(series)
             if not series:
                 titles = session.query(AnimeTitle).all()
                 get_title = lambda title: title if isinstance(title, str) else title.name
                 matches = fw_process.extract(name, titles, processor=get_title)
                 matches = sorted(matches, key=lambda title: title[1], reverse=True)
                 log.info(matches)
+                raise plugin.PluginError('This is a test')
                 series_id = matches.pop()[0].parent_id
                 log.info(series_id)
                 series = session.query(Anime).filter(Anime.id_ == series_id).first()

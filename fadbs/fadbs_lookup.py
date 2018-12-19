@@ -1,6 +1,5 @@
 """Class responsible for looking up a series and lazy loading the values."""
 import logging
-from typing import Type
 
 from flexget import plugin
 from flexget.event import event
@@ -9,9 +8,8 @@ from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
 from .util import ANIDB_SEARCH
-from .util.api_anidb import AnimeEpisode
 
-PLUGIN_ID = 'fadbs_lookup'
+PLUGIN_ID: str = 'fadbs_lookup'
 
 log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
@@ -49,7 +47,9 @@ class FadbsLookup(object):
         'anidb_tags': lambda series: {
             genre.genre.anidb_id: [genre.genre.name, genre.weight] for genre in series.genres
         },
-        'anidb_episodes': lambda series: [(episode.anidb_id, episode.number) for episode in series.episodes],
+        'anidb_episodes': lambda series: [
+            (episode.anidb_id, episode.number) for episode in series.episodes
+        ],
         'anidb_year': 'year',
         'anidb_season': 'season'}
 
@@ -87,13 +87,13 @@ class FadbsLookup(object):
 
     @property
     def series_identifier(self):
+        """Return what field is used to identify the series."""
         return 'anidb_id'
 
     @plugin.internet(log)
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
-
         series = None
 
         try:
@@ -116,15 +116,14 @@ class FadbsLookup(object):
             session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
-                episode = None
-                for episode_entry in series.episodes:
-                    if episode_entry.number == entry['series_id']:
-                        episode = episode_entry
-                        break
-                if episode:
+                entry_id = entry['series_id']
+                episode = [episode_entry for episode_entry in series.episodes if episode_entry.number == entry_id]
+                if len(episode):
+                    episode = episode[0]
                     entry.update_using_map(self.episode_field_map, episode)
 
 
 @event('plugin.register')
 def register_plugin():
+    """Register the plugin with Flexget."""
     plugin.register(FadbsLookup, PLUGIN_ID, api_ver=2, interfaces=['task', 'series_metainfo', 'movie_metainfo'])

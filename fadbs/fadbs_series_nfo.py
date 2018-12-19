@@ -4,13 +4,14 @@ import os
 
 from flexget import plugin
 from flexget.event import event
+from flexget.logger import FlexGetLogger
 from flexget.utils import template
 
 from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
-log = logging.getLogger(PLUGIN_ID)
+log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsSeriesNfo(object):

@@ -1,5 +1,5 @@
 """Useful methods for data structures."""
-from typing import Dict, Set, Integer
+from typing import Dict, Set
 
 
 def find_in_list_of_dict(haystack, test_key, test_value, needle_key, return_first=True):
@@ -19,7 +19,7 @@ def find_in_list_of_dict(haystack, test_key, test_value, needle_key, return_firs
     return results
 
 
-def anime_titles_diff(new_cache: Dict[Integer, Set], old_cache: Dict[Integer, Set]) -> Dict[Integer, Set]:
+def anime_titles_diff(new_cache: Dict[int, Set], old_cache: Dict[int, Set]) -> Dict[int, Set]:
     """
     Find the difference between two anime-titles dictionary caches.
     new_cache \ old_cache
@@ -28,10 +28,10 @@ def anime_titles_diff(new_cache: Dict[Integer, Set], old_cache: Dict[Integer, Se
     :param old_cache: The previous cache file converted to a dictionary
     :return: The complement of new_cache and old_cache
     """
-    differ: Dict[Integer, Set] = {}
+    differ: Dict[int, Set] = {}
     for anidb_id, titles in new_cache.items():
         if anidb_id in old_cache.keys():
-            new_set = titles - old_cache[anidb_id]
+            new_set = titles - set(old_cache[anidb_id])
             if len(new_set):
                 differ.update({anidb_id: new_set})
             continue

@@ -3,19 +3,24 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-from flexget import plugin
-from flexget.manager import manager
-from flexget.utils import requests
 from sqlalchemy import orm as sa_orm
 
+from flexget import plugin
+from flexget.logger import FlexGetLogger
+from flexget.manager import manager
+from flexget.utils import requests
+
 from .anidb_cache import cached_anidb
-from .anidb_parsing_interface import AnidbParserTemplate
+from .anidb_parse_episodes import AnidbParserEpisodes
 from .anidb_parser_tags import AnidbParserTags
+from .anidb_parsing_interface import AnidbParserTemplate
 from .api_anidb import Anime
 
 PLUGIN_ID = 'anidb_parser'
 
-LOG = logging.getLogger(PLUGIN_ID)
+LOG: FlexGetLogger = logging.getLogger(PLUGIN_ID)
+
+DISABLED = True
 
 requests_ = requests.Session()
 requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
@@ -23,7 +28,7 @@ requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
 
 
-class AnidbParser(AnidbParserTemplate, AnidbParserTags):
+class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
     """Download and parse an AniDB entry into the database."""
 
     client_string = 'fadbs'
@@ -54,7 +59,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
         self._get_anime()
 
     def __del__(self):
-        LOG.info('YEETING %s', self)
+        LOG.trace('YEETING %s', self)
         self.session.close()
 
     @property
@@ -79,7 +84,8 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
         params = self.anidb_params.copy()
         params.update(request='anime', aid=self.anidb_id)
-        raise plugin.PluginWarning('BANNED!')
+        if DISABLED:
+            raise plugin.PluginWarning('BANNED!')
         page = requests_.get(self.anidb_endpoint, params=params)
         page = page.text
         if '500' in page and 'banned' in page.lower():
@@ -102,7 +108,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
         """Parse the soup and shove it into the database."""
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')
-        
+
         with self.session.no_autoflush:
             root = soup.find('anime')
 
@@ -134,16 +140,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags):
             if description:
                 self.series.description = description.string
 
-            ratings = root.find('ratings')
-            if ratings:
-                permanent = ratings.find('permanent')
-                if permanent:
-                    self.series.permanent_rating = float(permanent.string)
-                    # todo: permanent votes
-                mean = ratings.find('temporary')
-                if mean:
-                    self.series.mean_rating = float(mean.string)
-                    # todo: mean votes
+            self._get_ratings(root.find('ratings'))
 
             self._set_tags(root.find('tags'))
 

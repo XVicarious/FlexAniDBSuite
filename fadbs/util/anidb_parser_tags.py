@@ -2,11 +2,12 @@
 import logging
 
 from flexget import plugin
+from flexget.logger import FlexGetLogger
 
-from .api_anidb import AnimeGenre, AnimeGenreAssociation
 from .anidb_structs import DEFAULT_TAG_BLACKLIST
+from .api_anidb import AnimeGenre, AnimeGenreAssociation
 
-LOG = logging.getLogger('anidb_parser')
+LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 
 
 class AnidbParserTags():
@@ -39,7 +40,7 @@ class AnidbParserTags():
                     self._recurse_remove_tags(tags, tag['id'])
                 tags.remove(tag)
 
-    def _select_parentid(self, tag):
+    def _select_parentid(self, tag) -> int:
         if 'parentid' in tag.attrs:
             return int(tag['parentid'])
         return 0
@@ -54,24 +55,25 @@ class AnidbParserTags():
         if weight and tag_assoc.weight != weight:
             tag_assoc.weight = weight
 
+    def _get_tag(self, anidb_id: int, name: str, just_query=False) -> AnimeGenre:
+        db_tag = self.session.query(AnimeGenre).filter(
+                AnimeGenre.anidb_id == anidb_id).first()
+        if not (just_query or db_tag):
+            LOG.debug('%s is not in the tag list, adding', name)
+            db_tag = AnimeGenre(anidb_id, name)
+        return db_tag
+
     def _set_tags(self, tags_tags):
         if tags_tags is None:
             return plugin.PluginError('tags_tags is None')
-        tags_tags = tags_tags.find_all('tag')
         self._remove_blacklist_tags(tags_tags)
-        tags_list = sorted(tags_tags, key=self._select_parentid)
+        tags_list = sorted(tags_tags.find_all('tag'), key=self._select_parentid)
         for tag in tags_list:
-            name = tag.find('name')
-            name = name.string if name else ''
-            db_tag = self.session.query(AnimeGenre).filter(
-                    AnimeGenre.anidb_id == int(tag['id'])).first()
-            if not db_tag:
-                LOG.debug('%s is not in the tag list, adding', name)
-                db_tag = AnimeGenre(int(tag['id']), name)
+            name = tag.find('name').string if tag.find('name') else ''
+            db_tag = self._get_tag(int(tag['id']), name)
             tag_parent_id = int(self._select_parentid(tag))
             if tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys():
-                parent_tag = self.session.query(AnimeGenre).filter(
-                        AnimeGenre.anidb_id == tag_parent_id).first()
+                parent_tag = self._get_tag(tag_parent_id, None, just_query=True)
                 if parent_tag:
                     db_tag.parent_id = parent_tag.anidb_id
                 else:
