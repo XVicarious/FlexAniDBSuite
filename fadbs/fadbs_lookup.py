@@ -1,5 +1,6 @@
 """Class responsible for looking up a series and lazy loading the values."""
 import logging
+from typing import Dict
 
 from flexget import plugin
 from flexget.event import event
@@ -19,7 +20,7 @@ class FadbsLookup(object):
 
     @staticmethod
     def _title_dict(series):
-        titles = {}
+        titles: Dict = {}
         for title in series.titles:
             if title.ep_type not in titles:
                 titles.update({title.ep_type: []})
@@ -31,7 +32,7 @@ class FadbsLookup(object):
 
     field_map = {
         'anidb_id': 'anidb_id',
-        'anidb_title_main': lambda series: series.title_main,
+        'anidb_title_main': 'title_main',
         'anidb_type': 'series_type',
         'anidb_num_episodes': 'num_episodes',
         'anidb_startdate': 'start_date',
@@ -96,15 +97,10 @@ class FadbsLookup(object):
         """Lookup series, and update the entry."""
         series = None
 
-        try:
-            anidb_id = entry.get('anidb_id', eval_lazy=False)
-            series_name = entry.get('series_name')
-            log.verbose('%s: %s', anidb_id, series_name)
-            series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
-        except plugin.PluginError as err:
-            raise plugin.PluginError(err)
-        except Exception as err:
-            raise plugin.PluginError(err)
+        anidb_id = entry.get('anidb_id', eval_lazy=False)
+        series_name = entry.get('series_name')
+        log.verbose('%s: %s', anidb_id, series_name)
+        series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
 
         # There is a whole part about expired entries here.
         # Possibly increase the default cache time to a week,

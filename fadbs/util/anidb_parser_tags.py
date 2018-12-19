@@ -3,18 +3,22 @@ import logging
 from typing import List
 
 from bs4 import Tag
+from sqlalchemy.orm import Session
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
 
 from .anidb_structs import DEFAULT_TAG_BLACKLIST
-from .api_anidb import AnimeGenre, AnimeGenreAssociation
+from .api_anidb import Anime, AnimeGenre, AnimeGenreAssociation
 
 LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 
 
-class AnidbParserTags():
+class AnidbParserTags(object):
     """Class to parse AniDB tags."""
+
+    session: Session
+    series: Anime
 
     def _recurse_remove_tags(self, tags: List[Tag], tag_id: int) -> None:
         intermediate_tags = [tag_id]

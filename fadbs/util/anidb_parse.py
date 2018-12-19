@@ -144,7 +144,9 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
 
             self._get_ratings(root.find('ratings'))
 
-            self._set_tags(root.find('tags'))
+            tags = root.find('tags')
+            if tags:
+                self._set_tags(tags('tag'))
 
             # todo: characters
 
