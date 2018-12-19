@@ -4,6 +4,7 @@ import math
 from datetime import datetime
 from typing import NewType
 
+from bs4 import Tag
 from sqlalchemy.orm import Session
 
 from flexget import plugin
@@ -36,7 +37,7 @@ class AnidbParserTemplate(object):
     def _get_anime_season(self, month: int) -> Season:
         return self.anime_seasons[math.ceil(month / 3) - 1]
 
-    def _get_ratings(self, ratings_tag):
+    def _get_ratings(self, ratings_tag: Tag) -> None:
         if not ratings_tag:
             raise plugin.pluginWarning('Ratings tag was None')
         permanent = ratings_tag.find('permanent')
@@ -48,7 +49,7 @@ class AnidbParserTemplate(object):
             self.series.mean_rating = float(mean.string)
             # todo: mean votes
 
-    def _set_dates(self, start_tag, end_tag):
+    def _set_dates(self, start_tag: Tag, end_tag: Tag) -> None:
         if start_tag:
             start_parts = start_tag.string.split('-')
             if len(start_parts) == 3:

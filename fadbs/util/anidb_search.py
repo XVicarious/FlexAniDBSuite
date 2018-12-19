@@ -7,9 +7,11 @@ import re
 import sys
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Dict, List, Set, Type
+from typing import Dict, List, Optional, Set, Type
 
+from bs4 import BeautifulSoup
 from fuzzywuzzy import process as fw_process
+from sqlalchemy.orm import Session as SQLSession
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
@@ -62,7 +64,7 @@ class AnidbSearch(object):
             self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
-    def _load_anime_to_db(self, anime_cache, session=None):
+    def _load_anime_to_db(self, anime_cache: Dict, session: Optional[SQLSession] = None) -> None:
         log.verbose('Starting to load anime to the database')
         db_anime_list = session.query(Anime).join(Anime.titles).all()
         for anidb_id, titles in anime_cache.items():
@@ -95,7 +97,7 @@ class AnidbSearch(object):
             session.add(db_anime)
         session.commit()
 
-    def _make_xml_junk(self):
+    def _make_xml_junk(self) -> None:
         expired = (datetime.now() - self.xml_cache['modified']) > timedelta(1)
         if not self.debug and (not self.xml_cache['path'].exists() or expired):
             log_mess = 'Cache is expired, %s' if self.xml_cache['path'].exists() else 'Cache does not exist, %s'
@@ -108,7 +110,7 @@ class AnidbSearch(object):
                 cache = self._xml_to_dict(soup)
             self._load_anime_to_db(cache)
 
-    def _xml_to_dict(self, soup):
+    def _xml_to_dict(self, soup: BeautifulSoup) -> Dict:
         log.verbose('Transforming anime-titles.xml into a dictionary.')
         cache: Dict = {}
         for anime in soup.find_all('anime'):
@@ -132,7 +134,7 @@ class AnidbSearch(object):
             log.debug('Pickled!')
         return diffr if diffr else cache
 
-    def __download_anidb_titles(self):
+    def __download_anidb_titles(self) -> None:
         anidb_titles = requests.get(self.anidb_title_dump_url)
         if anidb_titles.status_code >= HTTPStatus.BAD_REQUEST:
             raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
@@ -148,7 +150,11 @@ class AnidbSearch(object):
         self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
-    def lookup_series(self, name=None, anidb_id=None, join_genres=False, join_episodes=False, only_cached=False, session=None):
+    def lookup_series(self,
+            name: Optional[str] = None,
+            anidb_id: Optional[int] = None,
+            only_cached=False,
+            session: Optional[SQLSession] = None):
         """Lookup an Anime series and return it."""
         self._make_xml_junk()
         # If we don't have an id or a name, we cannot find anything
@@ -167,12 +173,6 @@ class AnidbSearch(object):
         if anidb_id:
             log.verbose('AniDB id is present and is %s.', anidb_id)
             query = session.query(Anime)
-            if join_genres:
-                log.trace('Joining genres')
-                query = query.join(*Anime.genres.attr)
-            if join_episodes:
-                log.trace('Joining episodes')
-                query = query.join(Anime.episodes)
             log.info('Anime anidb_id == %s', anidb_id)
             query = query.filter(Anime.anidb_id == anidb_id)
             series = query.first()

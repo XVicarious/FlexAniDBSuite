@@ -2,7 +2,9 @@
 import logging
 import os
 from datetime import datetime, timedelta
+from typing import Optional, Tuple
 
+from bs4 import BeautifulSoup
 from sqlalchemy import orm as sa_orm
 
 from flexget import plugin
@@ -49,7 +51,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
     anidb_cache_time = timedelta(days=1)
     anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
-    def __init__(self, anidb_id):
+    def __init__(self, anidb_id: int):
         """Initialize AnidbParser."""
         session = sa_orm.sessionmaker(class_=sa_orm.Session)
         session.configure(bind=manager.engine, expire_on_commit=False)
@@ -63,7 +65,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         self.session.close()
 
     @property
-    def is_banned(self):
+    def is_banned(self) -> Tuple[bool, Optional[datetime]]:
         """Check if we are banned from AniDB."""
         banned = False
         banned_until = None
@@ -97,14 +99,14 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
             raise plugin.PluginError('Banned from AniDB until {0}'.format(banned_until))
         return page
 
-    def _get_anime(self):
+    def _get_anime(self) -> None:
         self.series = self.session.query(Anime).filter(
                 Anime.anidb_id == self.anidb_id).first()
         if not self.series:
             raise plugin.PluginError('Anime not found? When is the last time the cache was updated?')
 
     @cached_anidb
-    def parse(self, soup=None):
+    def parse(self, soup: BeautifulSoup = None) -> None:
         """Parse the soup and shove it into the database."""
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')

@@ -25,7 +25,7 @@ class AnidbParserEpisodes(object):
             lang = AnimeLanguage(lang_name)
         return lang
 
-    def _set_titles(self, titles_tag: Tag):
+    def _set_titles(self, titles_tag: Tag) -> None:
         if not titles_tag:
             raise plugin.PluginError('titles_tag was None')
         series_id = self.series.id_
@@ -52,7 +52,7 @@ class AnidbParserEpisodes(object):
             airdate = datetime.strptime(airdate.string, self.date_format).date()
         return [episode_id, number, length, airdate, rating]
 
-    def _get_episode_titles(self, episode_id: int, episode_titles) -> List[AnimeEpisodeTitle]:
+    def _get_episode_titles(self, episode_id: int, episode_titles: List[Tag]) -> List[AnimeEpisodeTitle]:
         titles: List = []
         for title in episode_titles:
             lang = self._find_lang(title['xml:lang'])
@@ -60,7 +60,7 @@ class AnidbParserEpisodes(object):
             titles.append(anime_episode_title)
         return titles
 
-    def _set_episodes(self, episodes_tag: Tag):
+    def _set_episodes(self, episodes_tag: Tag) -> None:
         if not episodes_tag:
             raise plugin.PluginError('episodes_tag was None')
         for episode in episodes_tag.find_all('episode'):

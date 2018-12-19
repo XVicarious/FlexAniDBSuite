@@ -1,5 +1,8 @@
 """Class to parse AniDB tags."""
 import logging
+from typing import List
+
+from bs4 import Tag
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
@@ -13,7 +16,7 @@ LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 class AnidbParserTags():
     """Class to parse AniDB tags."""
 
-    def _recurse_remove_tags(self, tags, tag_id):
+    def _recurse_remove_tags(self, tags: List[Tag], tag_id: int) -> None:
         intermediate_tags = [tag_id]
         idx = 0
         while idx < len(tags):
@@ -27,7 +30,7 @@ class AnidbParserTags():
                 continue
             idx += 1
 
-    def _remove_blacklist_tags(self, tags):
+    def _remove_blacklist_tags(self, tags: List[Tag]) -> None:
         temp_tags = tags.copy()
         for tag in temp_tags:
             name = tag.find('name')
@@ -40,12 +43,12 @@ class AnidbParserTags():
                     self._recurse_remove_tags(tags, tag['id'])
                 tags.remove(tag)
 
-    def _select_parentid(self, tag) -> int:
+    def _select_parentid(self, tag: Tag) -> int:
         if 'parentid' in tag.attrs:
             return int(tag['parentid'])
         return 0
 
-    def _get_genre_association(self, tag, weight):
+    def _get_genre_association(self, tag: Tag, weight: int) -> None:
         tag_assoc = self.session.query(AnimeGenreAssociation).filter(
                 AnimeGenreAssociation.anime_id == self.series.id_,
                 AnimeGenreAssociation.genre_id == tag.id_).first()
@@ -63,7 +66,7 @@ class AnidbParserTags():
             db_tag = AnimeGenre(anidb_id, name)
         return db_tag
 
-    def _set_tags(self, tags_tags):
+    def _set_tags(self, tags_tags: List[Tag]) -> None:
         if tags_tags is None:
             return plugin.PluginError('tags_tags is None')
         self._remove_blacklist_tags(tags_tags)
