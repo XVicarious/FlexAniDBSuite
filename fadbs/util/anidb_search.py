@@ -1,13 +1,11 @@
-import json
 import logging
 import os
-import pathlib
 import pickle
 import re
 import sys
 from datetime import datetime, timedelta
 from http import HTTPStatus
-from typing import Dict, List, Optional, Set, Type
+from typing import Dict, Optional
 
 from bs4 import BeautifulSoup
 from fuzzywuzzy import process as fw_process
@@ -15,7 +13,6 @@ from sqlalchemy.orm import Session as SQLSession
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
-from flexget.manager import manager
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from flexget.utils.soup import get_soup
@@ -38,6 +35,7 @@ requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
 sys.setrecursionlimit(10000)
+
 
 class AnidbSearch(object):
     """Search for an anime's id."""
@@ -205,4 +203,5 @@ class AnidbSearch(object):
                 self.last_lookup.update(name=name, anidb_id=series.anidb_id)
             return series
 
-        raise plugin.PluginError('No series found with series name: %s, when was the last time the cache was updated?', name)
+        raise plugin.PluginError(
+                'No series found with series name: %s, when was the last time the cache was updated?', name)
