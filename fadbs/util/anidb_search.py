@@ -1,12 +1,12 @@
 import logging
 import os
-import pickle
 import re
 import sys
 from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Dict, Optional
 
+import yaml
 from bs4 import BeautifulSoup
 from fuzzywuzzy import process as fw_process
 from sqlalchemy.orm import Session as SQLSession
@@ -20,6 +20,7 @@ from flexget.utils.soup import get_soup
 from .. import BASE_PATH
 from .anidb_parse import AnidbParser
 from .api_anidb import Anime, AnimeLanguage, AnimeTitle
+from .path import Path
 from .stucture_utils import anime_titles_diff
 
 PLUGIN_ID = 'anidb_search'
@@ -34,20 +35,16 @@ requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
 requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
-sys.setrecursionlimit(10000)
+sys.setrecursionlimit(13000)
 
 
 class AnidbSearch(object):
     """Search for an anime's id."""
 
     anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
-    xml_cache = {
-        'path': BASE_PATH / 'anime-titles.xml',
-        'exists': False,
-        'modified': datetime.fromtimestamp(0),
-    }
+    xml_file = Path(BASE_PATH, 'anime-titles.xml')
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
-    anidb_json = BASE_PATH / 'anime-titles.json'
+    anidb_json = BASE_PATH / 'anime-titles.yml'
     particle_words = {
         'x-jat': {
             'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',
@@ -56,13 +53,12 @@ class AnidbSearch(object):
     last_lookup = {}
 
     def __init__(self):
-        self.debug = False
-        if self.xml_cache['path'].exists():
-            mtime = self.xml_cache['path'].stat().st_mtime
-            self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
+        self.debug = True
 
     @with_session
-    def _load_anime_to_db(self, anime_cache: Dict, session: Optional[SQLSession] = None) -> None:
+    def _load_anime_to_db(self, anime_cache: Dict, session: SQLSession = None) -> None:
+        if not session:
+            raise plugin.PluginError('We weren\'t given a session!')
         log.verbose('Starting to load anime to the database')
         db_anime_list = session.query(Anime).join(Anime.titles).all()
         for anidb_id, titles in anime_cache.items():
@@ -96,14 +92,13 @@ class AnidbSearch(object):
         session.commit()
 
     def _make_xml_junk(self) -> None:
-        expired = (datetime.now() - self.xml_cache['modified']) > timedelta(1)
-        if not self.debug and (not self.xml_cache['path'].exists() or expired):
-            log_mess = 'Cache is expired, %s' if self.xml_cache['path'].exists() else 'Cache does not exist, %s'
+        expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
+        if not self.xml_file.exists() or expired:
+            log_mess = 'Cache is expired, %s' if self.xml_file.exists() else 'Cache does not exist, %s'
             log.info(log_mess, 'downloading now.')
-            # self.__download_anidb_titles()
-            self.xml_cache['modified'] = datetime.now()
+            self.__download_anidb_titles()
             cache: Dict = {}
-            with open(self.xml_cache['path'], 'r') as soup_file:
+            with open(self.xml_file, 'r') as soup_file:
                 soup = get_soup(soup_file, parser='lxml-xml')
                 cache = self._xml_to_dict(soup)
             self._load_anime_to_db(cache)
@@ -111,49 +106,41 @@ class AnidbSearch(object):
     def _xml_to_dict(self, soup: BeautifulSoup) -> Dict:
         log.verbose('Transforming anime-titles.xml into a dictionary.')
         cache: Dict = {}
-        for anime in soup.find_all('anime'):
+        for anime in soup('anime'):
             anidb_id = int(anime['aid'])
             log.trace('Adding %s to cache', anidb_id)
             title_list = set()
-            for title in anime.find_all('title'):
+            titles = anime('title')
+            for title in titles:
                 log.trace('Adding %s to %s', title.string, anidb_id)
                 title_lang = title['xml:lang']
                 title_type = title['type']
                 title_list.add((title.string, title_lang, title_type))
             cache.update({anidb_id: title_list})
-        diffr: Dict = None
-        if self.anidb_json.exists():
-            log.debug('An old cached dict exists, comparing with the new one')
-            old_cache = pickle.load(open(self.anidb_json, 'r'))
-            diffr = anime_titles_diff(cache, old_cache)
-        log.debug('Saving the dict as a pickle')
-        with open(self.anidb_json, 'w') as json_cache:
-            pickle.dump(cache, json_cache)
-            log.debug('Pickled!')
-        return diffr if diffr else cache
+        return cache
 
     def __download_anidb_titles(self) -> None:
+        if self.debug:
+            log.debug('In debug mode, not downloading a new dump.')
+            return
         anidb_titles = requests.get(self.anidb_title_dump_url)
         if anidb_titles.status_code >= HTTPStatus.BAD_REQUEST:
             raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
-        if os.path.exists(self.xml_cache['path']):
-            os.rename(self.xml_cache['path'], self.xml_cache['path'] + '.old')
-        with open(self.xml_cache['path'], 'w') as xml_file:
+        if os.path.exists(self.xml_file):
+            os.rename(self.xml_file, self.xml_file + '.old')
+        with open(self.xml_file, 'w') as xml_file:
             xml_file.write(anidb_titles.text)
             xml_file.close()
-        if self.debug: # todo: this is dumb here, move it
-            self.xml_cache['modified'] = datetime.now()
-            return
-        mtime = self.xml_cache['path'].stat().st_mtime
-        self.xml_cache['modified'] = datetime.fromtimestamp(mtime)
 
     @with_session
     def lookup_series(self,
-            name: Optional[str] = None,
-            anidb_id: Optional[int] = None,
-            only_cached=False,
-            session: Optional[SQLSession] = None):
+                      name: Optional[str] = None,
+                      anidb_id: Optional[int] = None,
+                      only_cached=False,
+                      session: SQLSession = None):
         """Lookup an Anime series and return it."""
+        if not session:
+            raise plugin.PluginError('We weren\'t given a session!')
         self._make_xml_junk()
         # If we don't have an id or a name, we cannot find anything
         if not (anidb_id or name):
@@ -168,7 +155,7 @@ class AnidbSearch(object):
 
         series = None
 
-        if anidb_id:
+        if False and anidb_id:
             log.verbose('AniDB id is present and is %s.', anidb_id)
             query = session.query(Anime)
             log.info('Anime anidb_id == %s', anidb_id)
@@ -177,19 +164,18 @@ class AnidbSearch(object):
             log.info(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
-            series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
+            # series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             log.info(series)
             if not series:
                 titles = session.query(AnimeTitle).all()
-                get_title = lambda title: title if isinstance(title, str) else title.name
-                matches = fw_process.extract(name, titles, processor=get_title)
-                matches = sorted(matches, key=lambda title: title[1], reverse=True)
+                matches = fw_process.extract(name, titles, processor=lambda title: title.name)
                 log.info(matches)
+                matches = sorted(matches, key=lambda title: title[1], reverse=True)
+                for match in matches:
+                    log.info(match)
                 raise plugin.PluginError('This is a test')
                 series_id = matches.pop()[0].parent_id
-                log.info(series_id)
                 series = session.query(Anime).filter(Anime.id_ == series_id).first()
-                log.info(series)
 
         if series:
             log.debug('%s', series)

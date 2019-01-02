@@ -3,16 +3,15 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
-from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
 from flexget import db_schema
-from flexget.db_schema import UpgradeImpossible
+from flexget.db_schema import Meta, UpgradeImpossible
 
 SCHEMA_VER = 1
 
-Base = db_schema.versioned_base('api_anidb', SCHEMA_VER)
+Base: Meta = db_schema.versioned_base('api_anidb', SCHEMA_VER)
 
 
 def _table_master(table_name, index_table_name, left_id, right_id):
