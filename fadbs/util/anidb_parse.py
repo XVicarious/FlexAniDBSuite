@@ -87,7 +87,8 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         params = self.anidb_params.copy()
         params.update(request='anime', aid=self.anidb_id)
         if DISABLED:
-            raise plugin.PluginWarning('BANNED!')
+            LOG.error('Banned from AniDB probably. Ask DerIdiot')
+            return
         page = requests_.get(self.anidb_endpoint, params=params)
         page = page.text
         if '500' in page and 'banned' in page.lower():

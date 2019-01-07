@@ -37,7 +37,7 @@ class FadbsLookup(object):
         'anidb_num_episodes': 'num_episodes',
         'anidb_startdate': 'start_date',
         'anidb_enddate': 'end_date',
-        'anidb_titles': lambda series: FadbsLookup._title_dict(series),
+        'anidb_titles': lambda series: [title.name for title in series.titles],
         # todo: related anime
         # todo: similar anime
         'anidb_official_url': 'url',

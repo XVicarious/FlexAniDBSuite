@@ -21,7 +21,6 @@ from .. import BASE_PATH
 from .anidb_parse import AnidbParser
 from .api_anidb import Anime, AnimeLanguage, AnimeTitle
 from .path import Path
-from .stucture_utils import anime_titles_diff
 
 PLUGIN_ID = 'anidb_search'
 
@@ -155,26 +154,18 @@ class AnidbSearch(object):
 
         series = None
 
-        if False and anidb_id:
+        if anidb_id:
             log.verbose('AniDB id is present and is %s.', anidb_id)
             query = session.query(Anime)
-            log.info('Anime anidb_id == %s', anidb_id)
             query = query.filter(Anime.anidb_id == anidb_id)
             series = query.first()
-            log.info(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
-            # series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
-            log.info(series)
+            series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
                 titles = session.query(AnimeTitle).all()
-                matches = fw_process.extract(name, titles, processor=lambda title: title.name)
-                log.info(matches)
-                matches = sorted(matches, key=lambda title: title[1], reverse=True)
-                for match in matches:
-                    log.info(match)
-                raise plugin.PluginError('This is a test')
-                series_id = matches.pop()[0].parent_id
+                match = fw_process.extractOne(name, titles)
+                series_id = match[0].parent_id
                 series = session.query(Anime).filter(Anime.id_ == series_id).first()
 
         if series:

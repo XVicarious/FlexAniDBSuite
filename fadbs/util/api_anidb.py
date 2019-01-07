@@ -179,6 +179,9 @@ class AnimeTitle(Base):
         self.ep_type = ep_type
         self.parent_id = parent
 
+    def __repr__(self):
+        return "<AnimeTitle name=\"{0}\", parent_id={1}>".format(self.name, self.parent_id)
+
 
 class AnimeLanguage(Base):
     """Language names for anime (ex: jp, en, x-jat)."""
