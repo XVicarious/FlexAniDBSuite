@@ -74,7 +74,7 @@ class AnidbParserTags(object):
         if tags_tags is None:
             return plugin.PluginError('tags_tags is None')
         self._remove_blacklist_tags(tags_tags)
-        tags_list = sorted(tags_tags.find_all('tag'), key=self._select_parentid)
+        tags_list = sorted(tags_tags, key=self._select_parentid)
         for tag in tags_list:
             name = tag.find('name').string if tag.find('name') else ''
             db_tag = self._get_tag(int(tag['id']), name)
