@@ -165,8 +165,9 @@ class AnidbSearch(object):
             if not series:
                 titles = session.query(AnimeTitle).all()
                 match = fw_process.extractOne(name, titles)
-                series_id = match[0].parent_id
-                series = session.query(Anime).filter(Anime.id_ == series_id).first()
+                if match:
+                    series_id = match[0].parent_id
+                    series = session.query(Anime).filter(Anime.id_ == series_id).first()
 
         if series:
             log.debug('%s', series)
