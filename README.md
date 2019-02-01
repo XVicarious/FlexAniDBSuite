@@ -1,6 +1,9 @@
 # FlexAniDBSuite (FADBS)
 ## [![Codacy Badge](https://api.codacy.com/project/badge/Grade/4aafbe20b9e64f9f94987c92301940b1)](https://www.codacy.com/app/XVSS/FlexAniDBSuite?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=XVicarious/FlexAniDBSuite&amp;utm_campaign=Badge_Grade)
 
+## HERE BE DRAGONS
+You are on the CWD branch of FADBS. This reflects FADBS in how it exists in my current production Flexget setup. So therefore it very well could be broken in many places. I test out experimental stuff here. Things change that could break your setup. Mine breaks regularly. But its all part of the fun.
+
 ### Introduction
 AniDB is the premire data source for all things anime, largely thanks to it's dedicated userbase. If you want metadata for anime, this is where you want to go.
 
