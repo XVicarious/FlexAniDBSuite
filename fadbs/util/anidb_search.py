@@ -8,6 +8,7 @@ from typing import Dict, Optional
 
 import yaml
 from bs4 import BeautifulSoup
+from fuzzywuzzy import fuzz
 from fuzzywuzzy import process as fw_process
 from sqlalchemy.orm import Session as SQLSession
 
@@ -40,7 +41,7 @@ sys.setrecursionlimit(13000)
 class AnidbSearch(object):
     """Search for an anime's id."""
 
-    anidb_title_dump_url = 'http://anidb.net/api/anime-titles.xml.gz'
+    anidb_title_dump_url = 'http://anidb.net/api/anime-titles.dat.gz'
     xml_file = Path(BASE_PATH, 'anime-titles.xml')
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
     anidb_json = BASE_PATH / 'anime-titles.yml'
@@ -50,6 +51,7 @@ class AnidbSearch(object):
         },
     }
     last_lookup = {}
+    cached_anime: Anime = None
 
     def __init__(self):
         self.debug = True
@@ -89,6 +91,7 @@ class AnidbSearch(object):
                 db_anime.titles.append(title)
             session.add(db_anime)
         session.commit()
+        self.xml_file.touch()
 
     def _make_xml_junk(self) -> None:
         expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
@@ -155,16 +158,21 @@ class AnidbSearch(object):
         series = None
 
         if anidb_id:
-            log.verbose('AniDB id is present and is %s.', anidb_id)
-            query = session.query(Anime)
-            query = query.filter(Anime.anidb_id == anidb_id)
-            series = query.first()
+            if self.cached_anime and self.cached_anime.anidb_id == anidb_id:
+                log.debug('We have aid%s cached, using it', anidb_id)
+                series = self.cached_anime
+            else:
+                log.verbose('AniDB id is present and is %s.', anidb_id)
+                query = session.query(Anime)
+                query = query.filter(Anime.anidb_id == anidb_id)
+                series = query.first()
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
                 titles = session.query(AnimeTitle).all()
-                match = fw_process.extractOne(name, titles)
+                match = fw_process.extractOne(name, titles, scorer=fuzz.token_sort_ratio)
+                log.info('%s: %s, %s', match[0], match[1], name)
                 if match:
                     series_id = match[0].parent_id
                     series = session.query(Anime).filter(Anime.id_ == series_id).first()
@@ -179,6 +187,7 @@ class AnidbSearch(object):
                 log.debug(series)
             if not anidb_id:
                 self.last_lookup.update(name=name, anidb_id=series.anidb_id)
+            self.cached_anime = series
             return series
 
         raise plugin.PluginError(

@@ -39,7 +39,8 @@ class AnidbParserTemplate(object):
 
     def _get_ratings(self, ratings_tag: Tag) -> None:
         if not ratings_tag:
-            raise plugin.pluginWarning('Ratings tag was None')
+            LOG.warning('Ratings tag was None')
+            return
         permanent = ratings_tag.find('permanent')
         if permanent:
             self.series.permanent_rating = float(permanent.string)

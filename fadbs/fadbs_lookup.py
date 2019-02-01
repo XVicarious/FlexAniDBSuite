@@ -64,7 +64,7 @@ class FadbsLookup(object):
             'anidb_episode_type': 'ep_type',
             'anidb_episode_airdate': 'airdate',
             'anidb_episode_rating': 'rating',
-            'anidb_episode_titles': 'titles',
+            'anidb_episode_titles': lambda episode: [title.title for title in episode.titles if title.language == 'en'],
             'anidb_episode_votes': 'votes'}
 
     schema = {'type': 'boolean'}
@@ -78,7 +78,8 @@ class FadbsLookup(object):
             self.register_lazy_fields(entry)
 
     def register_lazy_fields(self, entry):
-        entry.register_lazy_func(self.lazy_loader, self.field_map)
+        dict_keys = { **self.field_map, **self.episode_field_map }
+        entry.register_lazy_func(self.lazy_loader, dict_keys)
 
     def lazy_loader(self, entry):
         try:
@@ -99,7 +100,8 @@ class FadbsLookup(object):
 
         anidb_id = entry.get('anidb_id', eval_lazy=False)
         series_name = entry.get('series_name')
-        log.verbose('%s: %s', anidb_id, series_name)
+        location = entry.get('location')
+        log.verbose('%s: %s (%s) at %s', entry['title'], series_name, anidb_id, location)
         series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
 
         # There is a whole part about expired entries here.
@@ -112,11 +114,11 @@ class FadbsLookup(object):
             session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
-                entry_id = entry['series_id']
-                episode = [episode_entry for episode_entry in series.episodes if episode_entry.number == entry_id]
-                if len(episode):
-                    episode = episode[0]
-                    entry.update_using_map(self.episode_field_map, episode)
+                entry_id = str(entry['series_id'])
+                for episode_entry in series.episodes:
+                    if episode_entry.number == entry_id:
+                        entry.update_using_map(self.episode_field_map, episode_entry)
+                        break
 
 
 @event('plugin.register')

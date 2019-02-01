@@ -35,6 +35,8 @@ def cached_anidb(func):
             if not soup:
                 LOG.trace('We don\'t have %s cached, requesting it', anidb_id)
                 raw_page = args[0].request_anime()
+                if not raw_page:
+                    return None
                 with open(cache_file, 'w') as soup_file:
                     soup_file.write(raw_page)
                     soup_file.close()

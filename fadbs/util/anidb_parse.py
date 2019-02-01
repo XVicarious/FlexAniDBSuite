@@ -12,6 +12,8 @@ from flexget.logger import FlexGetLogger
 from flexget.manager import manager
 from flexget.utils import requests
 
+from requests import HTTPError
+
 from .anidb_cache import cached_anidb
 from .anidb_parse_episodes import AnidbParserEpisodes
 from .anidb_parser_tags import AnidbParserTags
@@ -22,7 +24,7 @@ PLUGIN_ID = 'anidb_parser'
 
 LOG: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
-DISABLED = True
+DISABLED = False
 
 requests_ = requests.Session()
 requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
@@ -85,13 +87,22 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         if self.is_banned[0]:
             raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
         params = self.anidb_params.copy()
-        params.update(request='anime', aid=self.anidb_id)
+        params = {'aid': self.anidb_id}
         if DISABLED:
             LOG.error('Banned from AniDB probably. Ask DerIdiot')
             return
-        page = requests_.get(self.anidb_endpoint, params=params)
-        page = page.text
-        if '500' in page and 'banned' in page.lower():
+        try:
+            page = requests_.get('anidb_lol', params=params)
+        except HTTPError as e:
+            LOG.warning(e)
+            return
+        if page:
+            page = page.text
+        else:
+            LOG.warning('Rip no page')
+            return
+        LOG.info(page)
+        if page == 'banned':
             time_now = datetime.now().timestamp()
             with open(self.anidb_ban_file, 'w') as aniban:
                 aniban.write(str(time_now))
@@ -154,5 +165,7 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
             self._set_episodes(root.find('episodes'))
 
             self.session.add(self.series)
+
+            self.series.updated = datetime.now()
 
         self.session.commit()

@@ -1,12 +1,12 @@
 """FADBS Series NFO Plugin."""
 import logging
 import os
-
+import re
 from flexget import plugin
 from flexget.event import event
 from flexget.logger import FlexGetLogger
 from flexget.utils import template
-
+from pathlib import Path
 from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
@@ -57,33 +57,56 @@ class FadbsSeriesNfo(object):
         """Cast a spell to make NFO files."""
         log.info('Starting fadbs_series_nfo')
         filename = os.path.expanduser('tvshow.nfo.template')
+        episode_template = os.path.expanduser('episode.nfo.template')
         for entry in task.entries:
             log.debug('Starting nfo generation for %s', entry['title'])
             # Load stuff
-            entry['fadbs_nfo'] = {}
-            entry_titles = entry.get('anidb_titles')
-            if entry_titles:
-                entry['fadbs_nfo'].update(title=self._main_title(config, entry_titles))
-            else:
-                log.warning('We were not given any titles, skipping...')
+            if os.path.isdir(entry['location']):
+                entry['fadbs_nfo'] = {}
+                entry_titles = entry.get('anidb_titles')
+                if entry_titles:
+                    entry['fadbs_nfo'].update(title=entry['anidb_title_main'])
+                else:
+                    log.warning('We were not given any titles, skipping...')
+                    continue
+                entry_tags = entry.get('anidb_tags')
+                entry['fadbs_nfo']['genres'] = []
+                entry['fadbs_nfo']['tags'] = []
+                if entry_tags:
+                    fadbs_nfo = self._genres(entry.get('anidb_tags').items(), config['genre_weight'])
+                    entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
+                    entry['fadbs_nfo'].update(tags=fadbs_nfo[1])
+                template_ = template.render_from_entry(template.get_template(filename), entry)
+                nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
+                with open(nfo_path, 'wb') as nfo:
+                    nfo.write(template_.encode('utf-8'))
                 continue
-            entry_tags = entry.get('anidb_tags')
-            entry['fadbs_nfo']['genres'] = []
-            entry['fadbs_nfo']['tags'] = []
-            if entry_tags:
-                fadbs_nfo = self._genres(entry.get('anidb_tags').items(), config['genre_weight'])
-                entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
-                entry['fadbs_nfo'].update(tags=fadbs_nfo[1])
-            template_ = template.render_from_entry(template.get_template(filename), entry)
-            nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
-            with open(nfo_path, 'wb') as nfo:
-                nfo.write(template_.encode('utf-8'))
-                nfo.close()
+            log.info('store: %s', entry.store.get('anidb_episode_number'))
+            episode_number = entry.get('anidb_episode_number')
+            file_path = entry['location']
+            path = file_path[:-3] + "nfo"
+            nfo_path = Path(path)
+            log.info(nfo_path)
+            entry['anidb_episode_extra'] = dict()
+            entry['anidb_episode_extra']['season'] = 1
+            log.info(episode_number)
+            if episode_number:
+                try:
+                    epi_num = int(entry['anidb_episode_number'])
+                except:
+                    entry['anidb_episode_extra']['season'] = 0
+                    num = re.compile('\d+$')
+                    log.info('type: %s', type(entry['anidb_episode_number']))
+                    entry['anidb_episode_number'] = num.match(entry['anidb_episode_number'])
+                template_ = template.render_from_entry(template.get_template(episode_template), entry)
+                with open(nfo_path, 'wb') as nfo:
+                    nfo.write(template_.encode('utf-8'))
 
     def _genres(self, anidb_tags, genre_weight):
         genres = []
         tags = []
         for aid, info in anidb_tags:
+            aid = int(aid)
             log.trace('%s: %s, weight %s', aid, info[0], info[1])
             if aid in self.default_genres or genre_weight <= info[1]:
                 genres.append(info[0])
@@ -91,15 +114,6 @@ class FadbsSeriesNfo(object):
                 continue
             tags.append(info[0])
         return genres, tags
-
-    @classmethod
-    def _main_title(cls, config, titles):
-        title = None
-        if 'type' in config and 'lang' in config:
-            title = find_in_list_of_dict(config['type'], 'lang', config['lang'], 'name')
-        if title is None or (isinstance(config, bool) and config):
-            return find_in_list_of_dict(titles['main'], 'lang', 'x-jat', 'name')
-        return title
 
 
 @event('plugin.register')
