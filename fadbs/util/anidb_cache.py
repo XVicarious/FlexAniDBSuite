@@ -1,52 +1,44 @@
-from __future__ import unicode_literals, division, absolute_import
+"""Handles cached files from AniDB."""
+import logging
+from pathlib import Path
 
-import hashlib
-import os
+from bs4 import BeautifulSoup
 
-from flexget import logging
-from flexget.manager import manager
+from flexget.logger import FlexGetLogger
 from flexget.utils.soup import get_soup
 
-log = logging.getLogger('anidb_cache')
+from .. import BASE_PATH
 
-ANIDB_CACHE = '.anidb_cache'
+LOG: FlexGetLogger = logging.getLogger('anidb_cache')
+
+ANIDB_CACHE = BASE_PATH / '.anidb_cache'
+
+
+def find_soup(cache_file: Path) -> BeautifulSoup:
+    """Find and return some soup."""
+    if cache_file.exists():
+        LOG.trace('Cache of %s exists, loading it', cache_file.stem)
+        with open(cache_file, 'r') as soup_file:
+            return get_soup(soup_file, parser='lxml-xml')
+    return None
 
 
 def cached_anidb(func):
-    """ Decorator for loading an AniDB entry from cache """
-
-    anidb_anime_string = 'anime: %s'
-
-    def __get_blake_name(anidb_cache_name):
-        blake = hashlib.new('blake2b')
-        blake.update(anidb_cache_name)
-        return blake.hexdigest()
-
-    def __get_soup(file_path):
-        if os.path.exists(file_path):
-            with open(file_path, 'r') as cached_file:
-                soup = get_soup(cached_file, parser='lxml')
-                cached_file.close()
-                return soup
-        return None
-
+    """Load an AniDB entry from cache."""
     def decorator(*args, **kwargs):
-        """ Logic behind the decorator """
+        """Logic behind the decorator."""
         anidb_id = args[0].anidb_id
         if anidb_id:
-            log.trace('We have an anidb_id!')
-            anidb_cache_name = (anidb_anime_string % anidb_id).encode()
-            if 'blake2b' in hashlib.algorithms_available:
-                log.trace('blake2b is here!')
-                cache_file = os.path.join(manager.config_base, ANIDB_CACHE, __get_blake_name(anidb_cache_name))
-                kwargs.update(soup=__get_soup(cache_file))
-            if 'soup' not in kwargs or not kwargs['soup']:
-                cache_file = os.path.join(manager.config_base, ANIDB_CACHE, hashlib.md5(anidb_cache_name).hexdigest())
-                if os.path.exists(cache_file):
-                    kwargs.update(soup=__get_soup(cache_file))
-                    if 'blake2b' in hashlib.algorithms_available:
-                        blake_path = os.path.join(manager.config_base, ANIDB_CACHE, __get_blake_name(anidb_cache_name))
-                        os.rename(cache_file, blake_path)
+            LOG.trace('We have an anidb_id!')
+            cache_file = ANIDB_CACHE / (str(anidb_id) + '.anime')
+            soup = find_soup(cache_file)
+            if not soup:
+                LOG.trace('We don\'t have %s cached, requesting it', anidb_id)
+                raw_page = args[0].request_anime()
+                with open(cache_file, 'w') as soup_file:
+                    soup_file.write(raw_page)
+                    soup_file.close()
+                soup = get_soup(raw_page, parser='lxml-xml')
+            kwargs.update(soup=soup)
         func(*args, **kwargs)
-
     return decorator

@@ -1,18 +1,21 @@
+"""FADBS Series NFO Plugin."""
 import logging
 import os
 
 from flexget import plugin
 from flexget.event import event
+from flexget.logger import FlexGetLogger
 from flexget.utils import template
 
 from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
-log = logging.getLogger(PLUGIN_ID)
+log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsSeriesNfo(object):
+    """Series NFO plugin object."""
 
     schema = {
         'oneOf': [
@@ -26,8 +29,8 @@ class FadbsSeriesNfo(object):
                            'properties': {
                                'type': {'type': 'string', 'default': 'main'},
                                'emum': ['main', 'official', 'synonym', 'short'],
-                               'lang': {'type': 'string', 'default': 'x-jat'}}}}}
-        ]
+                               'lang': {'type': 'string', 'default': 'x-jat'}}}}},
+        ],
     }
 
     # These are all genres, genres that are True don't have possible overriding sub-genres
@@ -47,10 +50,11 @@ class FadbsSeriesNfo(object):
         2887: True,  # Tragedy
         2614: True, 1846: True, 2616: True, 1802: True, 1077: True, 922: True,  # Target Audiences
         2864: True, 2869: True,  # Daily Life and School Life
-        2881: True  # Sports
+        2881: True,  # Sports
     }
 
     def on_task_output(self, task, config):
+        """Cast a spell to make NFO files."""
         log.info('Starting fadbs_series_nfo')
         filename = os.path.expanduser('tvshow.nfo.template')
         for entry in task.entries:
@@ -59,7 +63,7 @@ class FadbsSeriesNfo(object):
             entry['fadbs_nfo'] = {}
             entry_titles = entry.get('anidb_titles')
             if entry_titles:
-                entry['fadbs_nfo'].update(title=self.__main_title(config, entry_titles))
+                entry['fadbs_nfo'].update(title=self._main_title(config, entry_titles))
             else:
                 log.warning('We were not given any titles, skipping...')
                 continue
@@ -67,7 +71,7 @@ class FadbsSeriesNfo(object):
             entry['fadbs_nfo']['genres'] = []
             entry['fadbs_nfo']['tags'] = []
             if entry_tags:
-                fadbs_nfo = self.__genres(entry.get('anidb_tags').items(), config['genre_weight'])
+                fadbs_nfo = self._genres(entry.get('anidb_tags').items(), config['genre_weight'])
                 entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
                 entry['fadbs_nfo'].update(tags=fadbs_nfo[1])
             template_ = template.render_from_entry(template.get_template(filename), entry)
@@ -76,20 +80,20 @@ class FadbsSeriesNfo(object):
                 nfo.write(template_.encode('utf-8'))
                 nfo.close()
 
-    def __genres(self, anidb_tags, genre_weight):
+    def _genres(self, anidb_tags, genre_weight):
         genres = []
         tags = []
         for aid, info in anidb_tags:
             log.trace('%s: %s, weight %s', aid, info[0], info[1])
-            if aid in self.default_genres or info[1] >= genre_weight:
+            if aid in self.default_genres or genre_weight <= info[1]:
                 genres.append(info[0])
                 # todo: remove an overridden genre
                 continue
             tags.append(info[0])
         return genres, tags
 
-    @staticmethod
-    def __main_title(config, titles):
+    @classmethod
+    def _main_title(cls, config, titles):
         title = None
         if 'type' in config and 'lang' in config:
             title = find_in_list_of_dict(config['type'], 'lang', config['lang'], 'name')
