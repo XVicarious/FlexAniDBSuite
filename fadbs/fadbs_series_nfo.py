@@ -108,7 +108,7 @@ class FadbsSeriesNfo(object):
         for aid, info in anidb_tags:
             aid = int(aid)
             log.trace('%s: %s, weight %s', aid, info[0], info[1])
-            if aid in self.default_genres or genre_weight <= info[1]:
+            if aid in self.default_genres.keys() or genre_weight <= info[1]:
                 genres.append(info[0])
                 # todo: remove an overridden genre
                 continue

@@ -173,7 +173,7 @@ class AnidbSearch(object):
                 titles = session.query(AnimeTitle).all()
                 match = fw_process.extractOne(name, titles, scorer=fuzz.token_sort_ratio)
                 log.info('%s: %s, %s', match[0], match[1], name)
-                if match:
+                if match and match[1] >= 85:
                     series_id = match[0].parent_id
                     series = session.query(Anime).filter(Anime.id_ == series_id).first()
 
