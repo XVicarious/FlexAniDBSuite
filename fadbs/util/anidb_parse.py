@@ -92,7 +92,9 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
     def request_anime(self):
         """Request an anime from AniDB."""
         if self.is_banned[0]:
-            raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
+            raise plugin.PluginError(
+                'Banned from AniDB until {0}'.format(
+                    self.is_banned[1]))
         params = self.anidb_params.copy()
         params = {'aid': self.anidb_id}
         if DISABLED:

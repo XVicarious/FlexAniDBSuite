@@ -6,9 +6,6 @@ from datetime import datetime, timedelta
 from http import HTTPStatus
 from typing import Dict, Optional
 
-import yaml
-from bs4 import BeautifulSoup
-from fuzzywuzzy import fuzz
 from fuzzywuzzy import process as fw_process
 from sqlalchemy.orm import Session as SQLSession
 
@@ -94,7 +91,8 @@ class AnidbSearch(object):
         self.xml_file.touch()
 
     def _make_xml_junk(self) -> None:
-        expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
+        if self.xml_file.exists():
+            expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
         if not self.xml_file.exists() or expired:
             log_mess = 'Cache is expired, %s' if self.xml_file.exists() else 'Cache does not exist, %s'
             log.info(log_mess, 'downloading now.')
@@ -171,9 +169,9 @@ class AnidbSearch(object):
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
                 titles = session.query(AnimeTitle).all()
-                match = fw_process.extractOne(name, titles, scorer=fuzz.token_sort_ratio)
+                match = fw_process.extractOne(name, titles)
                 log.info('%s: %s, %s', match[0], match[1], name)
-                if match and match[1] >= 85:
+                if match and match[1] >= 90:
                     series_id = match[0].parent_id
                     series = session.query(Anime).filter(Anime.id_ == series_id).first()
 
