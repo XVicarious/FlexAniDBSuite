@@ -1,3 +1,4 @@
+import gzip
 import logging
 import os
 import re
@@ -13,7 +14,6 @@ from flexget import plugin
 from flexget.logger import FlexGetLogger
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
-from flexget.utils.soup import get_soup
 
 from .. import BASE_PATH
 from .anidb_parse import AnidbParser
@@ -47,48 +47,73 @@ class AnidbSearch(object):
             'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',
         },
     }
+    title_types = [
+        'main',
+        'synonym',
+        'short',
+        'official',
+    ]
     last_lookup = {}
     cached_anime: Anime = None
 
     def __init__(self):
-        self.debug = True
+        self.debug = False
+
+    def psv_to_dict(self, filename=xml_file) -> Dict:
+        try:
+            anime_titles = open(filename, 'r')
+        except OSError:
+            log.warning('anime_titles.dat was not found, not importing titles')
+            return {}
+        anime_dict: Dict = {}
+        for line in anime_titles:
+            if line[0] == '#':
+                log.trace('Skipping line due to comment')
+                continue
+            split_line = line.split('|')
+            if len(split_line) < 4:
+                log.warning("We don't have all of the information we need, skipping")
+                log.debug('line: {0}'.format(line))
+                continue
+            try:
+                aid = int(split_line[0])
+            except ValueError:
+                log.warning("Can't turn {0} into an int, no aid, skipping.".format(split_line[0]))
+                continue
+            type_index = int(split_line[1])
+            log.info(type_index)
+            if type_index > 3:
+                continue
+            title_type = self.title_types[type_index - 1]
+            if aid not in anime_dict:
+                anime_dict[aid] = []
+            anime_dict[aid].append([title_type, *split_line[2:]])
+        anime_titles.close()
+        return anime_dict
 
     @with_session
-    def _load_anime_to_db(self, anime_cache: Dict, session: SQLSession = None) -> None:
-        if not session:
-            raise plugin.PluginError('We weren\'t given a session!')
-        log.verbose('Starting to load anime to the database')
-        db_anime_list = session.query(Anime).join(Anime.titles).all()
-        for anidb_id, titles in anime_cache.items():
-            log.debug('Starting anime %s', anidb_id)
-            db_anime = next((anime for anime in db_anime_list if anime.anidb_id == anidb_id), None)
-            if not db_anime:
-                log.trace('Anime %s was not found in the database, adding it', anidb_id)
-                db_anime = Anime()
-                db_anime.anidb_id = anidb_id
-            for title in titles:
-                log.trace('Checking anime %s title %s', anidb_id, title[0])
-                has_title = False
-                for db_title in db_anime.titles:
-                    eq_title_name = db_title.name == title[0]
-                    eq_title_lang = db_title.language == title[1]
-                    eq_title_type = db_title.ep_type == title[2]
-                    if eq_title_name and eq_title_lang and eq_title_type:
-                        log.trace('Anime %s already has this title.', anidb_id)
-                        has_title = True
-                        break
-                if has_title:
-                    continue
-                log.trace('Anime %s did not have title %s, adding it.', anidb_id, title[0])
-                lang = session.query(AnimeLanguage).filter(AnimeLanguage.name == title[1]).first()
-                if not lang:
-                    lang = AnimeLanguage(title[1])
-                    session.add(lang)
-                title = AnimeTitle(title[0], lang.name, title[2], parent=db_anime.id_)
-                db_anime.titles.append(title)
-            session.add(db_anime)
+    def _load_anime_to_db(self, session=None) -> None:
+        # First load up the .dat file, which is really just a pipe separated file
+        # First three lines are comments
+        # aid|type|lang|title
+        # type is i+1 of title_types
+        # convert to dict keys are aid, value is an AnimeTitle
+        animes: Dict = self.psv_to_dict()
+        if not len(animes):
+            log.warning('We did not get any anime, bailing')
+            return
+        for anidb_id, anime in animes.items():
+            db_anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).all()
+            add_titles: list = []
+            for title in anime:
+                title_type = self.title_types[int(title[0])]
+                for title2 in db_anime:
+                    if (title2.ep_type == title_type and title2.lang == title[1] and title2.name == title[2]):
+                        log.trace('{0} exists in the database, skipping.'.format(title[1]))
+                        continue
+                    add_titles.append(AnimeTitle(title[2], title[1], title_type, title2._id))
+            db_anime[0].titles += add_titles
         session.commit()
-        self.xml_file.touch()
 
     def _make_xml_junk(self) -> None:
         if self.xml_file.exists():
@@ -97,27 +122,7 @@ class AnidbSearch(object):
             log_mess = 'Cache is expired, %s' if self.xml_file.exists() else 'Cache does not exist, %s'
             log.info(log_mess, 'downloading now.')
             self.__download_anidb_titles()
-            cache: Dict = {}
-            with open(self.xml_file, 'r') as soup_file:
-                soup = get_soup(soup_file, parser='lxml-xml')
-                cache = self._xml_to_dict(soup)
-            self._load_anime_to_db(cache)
-
-    def _xml_to_dict(self, soup: BeautifulSoup) -> Dict:
-        log.verbose('Transforming anime-titles.xml into a dictionary.')
-        cache: Dict = {}
-        for anime in soup('anime'):
-            anidb_id = int(anime['aid'])
-            log.trace('Adding %s to cache', anidb_id)
-            title_list = set()
-            titles = anime('title')
-            for title in titles:
-                log.trace('Adding %s to %s', title.string, anidb_id)
-                title_lang = title['xml:lang']
-                title_type = title['type']
-                title_list.add((title.string, title_lang, title_type))
-            cache.update({anidb_id: title_list})
-        return cache
+            self._load_anime_to_db()
 
     def __download_anidb_titles(self) -> None:
         if self.debug:
@@ -127,10 +132,12 @@ class AnidbSearch(object):
         if anidb_titles.status_code >= HTTPStatus.BAD_REQUEST:
             raise plugin.PluginError(anidb_titles.status_code, anidb_titles.reason)
         if os.path.exists(self.xml_file):
-            os.rename(self.xml_file, self.xml_file + '.old')
-        with open(self.xml_file, 'w') as xml_file:
-            xml_file.write(anidb_titles.text)
-            xml_file.close()
+            os.rename(self.xml_file, str(self.xml_file) + '.old')
+        with open(self.xml_file, 'wb') as xml_file:
+            # I don't know why, but requests isn't decompressing the requested data when I switched to .dat
+            # Maybe I'll put some effort into it some other time.
+            unzipped = gzip.decompress(anidb_titles.raw.read())
+            xml_file.write(unzipped)
 
     @with_session
     def lookup_series(self,
