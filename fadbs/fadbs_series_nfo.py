@@ -28,7 +28,7 @@ class FadbsSeriesNfo(object):
                  'title': {'type': 'object',
                            'properties': {
                                'type': {'type': 'string', 'default': 'main'},
-                               'emum': ['main', 'official', 'synonym', 'short'],
+                               'enum': ['main', 'official', 'synonym', 'short'],
                                'lang': {'type': 'string', 'default': 'x-jat'}}}}},
         ],
     }
@@ -73,9 +73,9 @@ class FadbsSeriesNfo(object):
                 entry['fadbs_nfo']['genres'] = []
                 entry['fadbs_nfo']['tags'] = []
                 if entry_tags:
-                    fadbs_nfo = self._genres(entry.get('anidb_tags').items(), config['genre_weight'])
-                    entry['fadbs_nfo'].update(genres=fadbs_nfo[0])
-                    entry['fadbs_nfo'].update(tags=fadbs_nfo[1])
+                    genres, tags = self._genres(entry.get('anidb_tags').items(), config['genre_weight'])
+                    entry['fadbs_nfo'].update(genres=genres)
+                    entry['fadbs_nfo'].update(tags=tags)
                 template_ = template.render_from_entry(template.get_template(filename), entry)
                 nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
                 with open(nfo_path, 'wb') as nfo:
@@ -87,7 +87,7 @@ class FadbsSeriesNfo(object):
             path = file_path[:-3] + "nfo"
             nfo_path = Path(path)
             log.info(nfo_path)
-            entry['anidb_episode_extra'] = dict()
+            entry['anidb_episode_extra'] = {}
             entry['anidb_episode_extra']['season'] = 1
             log.info(episode_number)
             if episode_number:
@@ -95,7 +95,7 @@ class FadbsSeriesNfo(object):
                     epi_num = int(entry['anidb_episode_number'])
                 except:
                     entry['anidb_episode_extra']['season'] = 0
-                    num = re.compile('\d+$')
+                    num = re.compile(r'\d+$')
                     log.info('type: %s', type(entry['anidb_episode_number']))
                     entry['anidb_episode_number'] = num.match(entry['anidb_episode_number'])
                 template_ = template.render_from_entry(template.get_template(episode_template), entry)
@@ -111,8 +111,8 @@ class FadbsSeriesNfo(object):
             if aid in self.default_genres.keys() or genre_weight <= info[1]:
                 genres.append(info[0])
                 # todo: remove an overridden genre
-                continue
-            tags.append(info[0])
+            else:
+                tags.append(info[0])
         return genres, tags
 
 

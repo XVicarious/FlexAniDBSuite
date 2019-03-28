@@ -32,7 +32,8 @@ class AnidbParserEpisodes(object):
         for title in titles_tag.find_all(True, recursive=False):
             lang = self._find_lang(title['xml:lang'])
             anime_title = AnimeTitle(title.string, lang.name, title['type'], series_id)
-            self.series.titles.append(anime_title)
+            if anime_title not in self.series.titles:
+                self.series.titles.append(anime_title)
 
     def _get_list_tag(self, tag: Tag, key: str) -> List:
         if tag:

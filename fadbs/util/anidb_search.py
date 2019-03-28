@@ -32,8 +32,6 @@ requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
 requests.add_domain_limiter(TimedLimiter('api.anidb.net', '3 seconds'))
 
-sys.setrecursionlimit(13000)
-
 
 class AnidbSearch(object):
     """Search for an anime's id."""
@@ -78,10 +76,9 @@ class AnidbSearch(object):
             try:
                 aid = int(split_line[0])
             except ValueError:
-                log.warning("Can't turn {0} into an int, no aid, skipping.".format(split_line[0]))
+                log.warning("Can't turn %s into an int, no aid, skipping.", split_line[0])
                 continue
             type_index = int(split_line[1])
-            log.info(type_index)
             if type_index > 3:
                 continue
             title_type = self.title_types[type_index - 1]
@@ -106,12 +103,18 @@ class AnidbSearch(object):
             db_anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).all()
             add_titles: list = []
             for title in anime:
-                title_type = self.title_types[int(title[0])]
-                for title2 in db_anime:
-                    if (title2.ep_type == title_type and title2.lang == title[1] and title2.name == title[2]):
-                        log.trace('{0} exists in the database, skipping.'.format(title[1]))
-                        continue
-                    add_titles.append(AnimeTitle(title[2], title[1], title_type, title2._id))
+                title_type = title[0]
+                for ani in db_anime:
+                    new_title = AnimeTitle(title[2], title[1], title_type, ani.id_)
+                    title_exists = False
+                    for title2 in ani.titles:
+                        if (title2 == new_title):
+                            log.trace('%s exists in the database, skipping.', title[1])
+                            continue
+                        title_exists = True
+                    if title_exists:
+                        log.debug('adding %s to the titles', title[2])
+                        add_titles.append(new_title)
             db_anime[0].titles += add_titles
         session.commit()
 
@@ -141,10 +144,8 @@ class AnidbSearch(object):
 
     @with_session
     def lookup_series(self,
-                      name: Optional[str] = None,
-                      anidb_id: Optional[int] = None,
-                      only_cached=False,
-                      session: SQLSession = None):
+                      name: Optional[str] = None, anidb_id: Optional[int] = None,
+                      only_cached=False, session: SQLSession = None):
         """Lookup an Anime series and return it."""
         if not session:
             raise plugin.PluginError('We weren\'t given a session!')
@@ -162,6 +163,8 @@ class AnidbSearch(object):
 
         series = None
 
+        log.verbose('%s: %s', anidb_id, name)
+
         if anidb_id:
             if self.cached_anime and self.cached_anime.anidb_id == anidb_id:
                 log.debug('We have aid%s cached, using it', anidb_id)
@@ -171,11 +174,12 @@ class AnidbSearch(object):
                 query = session.query(Anime)
                 query = query.filter(Anime.anidb_id == anidb_id)
                 series = query.first()
+                log.verbose(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
-                titles = session.query(AnimeTitle).all()
+                titles = session.query(AnimeTitle).filter(AnimeTitle.name.like('% '+title_part+' %') for title_part in name.split(' ') if title_part not in self.particle_words['x-jat']).all()
                 match = fw_process.extractOne(name, titles)
                 log.info('%s: %s, %s', match[0], match[1], name)
                 if match and match[1] >= 90:

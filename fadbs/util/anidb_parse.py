@@ -141,39 +141,48 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
                 raise plugin.PluginError(
                     'No anime was found in the soup, did we get passed somethign bad?')
 
+            LOG.trace('Setting series_type')
             series_type = root.find('type')
             if series_type:
                 self.series.series_type = series_type.string
 
+            LOG.trace('Setting num_episodes')
             num_episodes = root.find('episodecount')
             if not num_episodes:
                 self.series.num_episodes = 0
             self.series.num_episodes = int(num_episodes.string)
 
+            LOG.trace('Setting the start and end dates')
             self._set_dates(root.find('startdate'), root.find('enddate'))
 
+            LOG.trace('Setting titles')
             self._set_titles(root.find('titles'))
 
             # todo: similar, related
 
+            LOG.trace('Setting urls')
             official_url = root.find('url')
             if official_url:
                 self.series.url = official_url.string
 
             # todo: creators
 
+            LOG.trace('Setting description')
             description = root.find('description')
             if description:
                 self.series.description = description.string
 
+            LOG.trace('Setting ratings')
             self._get_ratings(root.find('ratings'))
 
+            LOG.trace('Setting tags')
             tags = root.find('tags')
             if tags:
                 self._set_tags(tags('tag'))
 
             # todo: characters
 
+            LOG.trace('Setting episodes')
             self._set_episodes(root.find('episodes'))
 
             self.session.add(self.series)

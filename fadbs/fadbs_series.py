@@ -6,8 +6,8 @@ from flexget.task import Task
 from flexget.event import event
 from flexget.logger import FlexGetLogger
 from flexget.config_schema import process_config
-from flexget.plugins.filter.series import FilterSeriesBase
-from flexget.plugins.parsers.parser_common import clean_value
+from flexget.components.series.series import FilterSeriesBase
+from flexget.components.parsing.parsers.parser_common import clean_value
 from flexget.utils.database import with_session
 
 from .util.api_anidb import Anime, AnimeTitle
