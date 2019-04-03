@@ -100,21 +100,20 @@ class AnidbSearch(object):
             log.warning('We did not get any anime, bailing')
             return
         for anidb_id, anime in animes.items():
-            db_anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).all()
+            db_anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).first()
             add_titles: list = []
             for title in anime:
-                title_type = title[0]
-                for ani in db_anime:
-                    new_title = AnimeTitle(title[2], title[1], title_type, ani.id_)
-                    title_exists = False
-                    for title2 in ani.titles:
-                        if (title2 == new_title):
-                            log.trace('%s exists in the database, skipping.', title[1])
-                            continue
+                title_itself = title[2].strip()
+                new_title = AnimeTitle(title_itself, title[1], title[0], db_anime.id_)
+                title_exists = False
+                for title2 in db_anime.titles:
+                    if (title2 == new_title):
+                        log.trace('%s exists in the database, skipping.', title_itself)
                         title_exists = True
-                    if title_exists:
-                        log.debug('adding %s to the titles', title[2])
-                        add_titles.append(new_title)
+                        break
+                if not title_exists:
+                    log.debug('adding %s to the titles', title_itself)
+                    add_titles.append(new_title)
             db_anime[0].titles += add_titles
         session.commit()
 
