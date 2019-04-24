@@ -5,14 +5,13 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 from bs4 import BeautifulSoup
+from requests import HTTPError
 from sqlalchemy import orm as sa_orm
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
 from flexget.manager import manager
 from flexget.utils import requests
-
-from requests import HTTPError
 
 from .anidb_cache import cached_anidb
 from .anidb_parse_episodes import AnidbParserEpisodes
@@ -32,7 +31,9 @@ requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 requests_.add_domain_limiter(
     requests.TimedLimiter(
         'api.anidb.net',
-        '3 seconds'))
+        '3 seconds',
+    ),
+)
 
 
 class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
@@ -118,15 +119,17 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
                 aniban.close()
             banned_until = datetime.fromtimestamp(time_now) + timedelta(1)
             raise plugin.PluginError(
-                'Banned from AniDB until {0}'.format(banned_until))
+                'Banned from AniDB until {0}'.format(banned_until)
+            )
         return page
 
     def _get_anime(self) -> None:
-        self.series = self.session.query(Anime).filter(
-                Anime.anidb_id == self.anidb_id).first()
+        self.series = self.session.query(Anime)\
+            .filter(Anime.anidb_id == self.anidb_id).first()
         if not self.series:
             raise plugin.PluginError(
-                'Anime not found? When is the last time the cache was updated?')
+                'Anime not found? When is the last time the cache was updated?',
+            )
 
     @cached_anidb
     def parse(self, soup: BeautifulSoup = None) -> None:
@@ -139,7 +142,8 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
 
             if not root:
                 raise plugin.PluginError(
-                    'No anime was found in the soup, did we get passed somethign bad?')
+                    'No anime was found in the soup, did we get passed something bad?',
+                )
 
             LOG.trace('Setting series_type')
             series_type = root.find('type')
