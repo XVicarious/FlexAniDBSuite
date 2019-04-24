@@ -27,7 +27,7 @@ class AnidbParserEpisodes(object):
 
     def _set_titles(self, titles_tag: Tag) -> None:
         if not titles_tag:
-            raise plugin.PluginError('titles_tag was None')
+            return  # todo: log
         series_id = self.series.id_
         for title in titles_tag.find_all(True, recursive=False):
             lang = self._find_lang(title['xml:lang'])
@@ -63,7 +63,8 @@ class AnidbParserEpisodes(object):
 
     def _set_episodes(self, episodes_tag: Tag) -> None:
         if not episodes_tag:
-            raise plugin.PluginError('episodes_tag was None')
+            #.verbose('episodes_tag was None')
+            return
         for episode in episodes_tag.find_all('episode'):
             db_episode = self.session.query(AnimeEpisode)
             db_episode = db_episode.filter(AnimeEpisode.anidb_id == episode['id']).first()

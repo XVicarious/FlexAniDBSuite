@@ -7,7 +7,6 @@ from flexget.event import event
 from flexget.logger import FlexGetLogger
 from flexget.utils import template
 from pathlib import Path
-from .util.stucture_utils import find_in_list_of_dict
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
@@ -92,12 +91,13 @@ class FadbsSeriesNfo(object):
             log.info(episode_number)
             if episode_number:
                 try:
-                    epi_num = int(entry['anidb_episode_number'])
-                except:
+                    episode_number = int(episode_number)
+                except Exception as e:
+                    print(e.name)
                     entry['anidb_episode_extra']['season'] = 0
                     num = re.compile(r'\d+$')
                     log.info('type: %s', type(entry['anidb_episode_number']))
-                    entry['anidb_episode_number'] = num.match(entry['anidb_episode_number'])
+                    episode_number = num.match(entry['anidb_episode_number'])
                 template_ = template.render_from_entry(template.get_template(episode_template), entry)
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(template_.encode('utf-8'))
@@ -107,12 +107,14 @@ class FadbsSeriesNfo(object):
         tags = []
         for aid, info in anidb_tags:
             aid = int(aid)
-            log.trace('%s: %s, weight %s', aid, info[0], info[1])
-            if aid in self.default_genres.keys() or genre_weight <= info[1]:
-                genres.append(info[0])
+            name, weight = info
+            log.trace('%s: %s, weight %s', aid, name, weight)
+            if aid in self.default_genres.keys() or genre_weight <= weight:
+                genres.append(name)
+                log.debug('Added %s as a genre', name)
+                continue
                 # todo: remove an overridden genre
-            else:
-                tags.append(info[0])
+            tags.append(name)
         return genres, tags
 
 

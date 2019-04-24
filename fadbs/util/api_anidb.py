@@ -8,6 +8,7 @@ from sqlalchemy.schema import ForeignKey, Index
 
 from flexget import db_schema
 from flexget.db_schema import Meta, UpgradeImpossible
+from flexget.components.parsing.parsers.parser_common import remove_dirt
 
 SCHEMA_VER = 1
 
@@ -65,11 +66,18 @@ class Anime(Base):
                 return title.name
 
     @property
+    def clean_title_main(self):
+        """Title cleaned for use as a series name."""
+        return remove_dirt(self.title_main)
+
+    @property
     def expired(self):
         """Check if we can download a new cache from AniDB, 24 hour hard limit."""
         if self.updated is None:
             return True
         tdelta = datetime.utcnow() - self.updated
+        entry_age = datetime.utcnow() - self.updated
+        is_week_old = entry_age >= timedelta(days=7)
         if tdelta >= timedelta(1):
             return True
         log.debug('This entry will expire in: %s seconds', timedelta(1) - tdelta)

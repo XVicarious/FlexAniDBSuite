@@ -101,6 +101,9 @@ class AnidbSearch(object):
             return
         for anidb_id, anime in animes.items():
             db_anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).first()
+            if not db_anime:
+                db_anime = Anime(anidb_id=anidb_id)
+                session.add(db_anime)
             add_titles: list = []
             for title in anime:
                 title_itself = title[2].strip()
@@ -114,7 +117,7 @@ class AnidbSearch(object):
                 if not title_exists:
                     log.debug('adding %s to the titles', title_itself)
                     add_titles.append(new_title)
-            db_anime[0].titles += add_titles
+            db_anime.titles += add_titles
         session.commit()
 
     def _make_xml_junk(self) -> None:
@@ -140,6 +143,7 @@ class AnidbSearch(object):
             # Maybe I'll put some effort into it some other time.
             unzipped = gzip.decompress(anidb_titles.raw.read())
             xml_file.write(unzipped)
+        log.info('Downloaded new title dump')
 
     @with_session
     def lookup_series(self,
@@ -169,7 +173,7 @@ class AnidbSearch(object):
                 log.debug('We have aid%s cached, using it', anidb_id)
                 series = self.cached_anime
             else:
-                log.verbose('AniDB id is present and is %s.', anidb_id)
+                log.debug('AniDB id is present and is %s.', anidb_id)
                 query = session.query(Anime)
                 query = query.filter(Anime.anidb_id == anidb_id)
                 series = query.first()
@@ -180,7 +184,7 @@ class AnidbSearch(object):
             if not series:
                 titles = session.query(AnimeTitle).filter(AnimeTitle.name.like('% '+title_part+' %') for title_part in name.split(' ') if title_part not in self.particle_words['x-jat']).all()
                 match = fw_process.extractOne(name, titles)
-                log.info('%s: %s, %s', match[0], match[1], name)
+                log.debug('%s: %s, %s', match[0], match[1], name)
                 if match and match[1] >= 90:
                     series_id = match[0].parent_id
                     series = session.query(Anime).filter(Anime.id_ == series_id).first()

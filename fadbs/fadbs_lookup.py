@@ -59,18 +59,20 @@ class FadbsLookup(object):
     # who knows. They've had 15 years to develop this api
     # and it still doesn't include a ton of things
     episode_field_map = {
-            'anidb_episode_id': 'anidb_id',
-            'anidb_episode_number': 'number',
-            'anidb_episode_type': 'ep_type',
-            'anidb_episode_airdate': 'airdate',
-            'anidb_episode_rating': 'rating',
-            'anidb_episode_titles': lambda episode: [title.title for title in episode.titles if title.language == 'en'],
-            'anidb_episode_votes': 'votes'}
+        'anidb_episode_id': 'anidb_id',
+        'anidb_episode_number': 'number',
+        'anidb_episode_type': 'ep_type',
+        'anidb_episode_airdate': 'airdate',
+        'anidb_episode_rating': 'rating',
+        'anidb_episode_titles': lambda episode: [
+            title.title for title in episode.titles if title.language == 'en'],
+        'anidb_episode_votes': 'votes'}
 
     schema = {'type': 'boolean'}
 
     @plugin.priority(130)
     def on_task_metainfo(self, task, config):
+        """Flexget Metainfo Method."""
         if not config:
             return
         for entry in task.entries:
@@ -78,7 +80,7 @@ class FadbsLookup(object):
             self.register_lazy_fields(entry)
 
     def register_lazy_fields(self, entry):
-        dict_keys = { **self.field_map, **self.episode_field_map }
+        dict_keys = {**self.field_map, **self.episode_field_map}
         entry.register_lazy_func(self.lazy_loader, dict_keys)
 
     def lazy_loader(self, entry):
@@ -96,9 +98,8 @@ class FadbsLookup(object):
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
-        series = None
 
-        anidb_id = entry.get('anidb_id', eval_lazy=False)
+        anidb_id = entry.get('anidb_id')
         series_name = entry.get('series_name')
         location = entry.get('location')
         log.verbose('%s: %s (%s) at %s', entry['title'], series_name, anidb_id, location)
@@ -124,4 +125,5 @@ class FadbsLookup(object):
 @event('plugin.register')
 def register_plugin():
     """Register the plugin with Flexget."""
-    plugin.register(FadbsLookup, PLUGIN_ID, api_ver=2, interfaces=['task', 'series_metainfo', 'movie_metainfo'])
+    plugin.register(FadbsLookup, PLUGIN_ID, api_ver=2,
+                    interfaces=['task', 'series_metainfo', 'movie_metainfo'])

@@ -189,4 +189,4 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
 
             self.series.updated = datetime.now()
 
-        self.session.commit()
+            self.session.commit()
