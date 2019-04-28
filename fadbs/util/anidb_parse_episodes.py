@@ -3,9 +3,8 @@ from datetime import datetime
 from typing import List
 
 from bs4 import Tag
-from sqlalchemy.orm import Session
-
 from flexget import plugin
+from sqlalchemy.orm import Session
 
 from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeLanguage, AnimeTitle
 

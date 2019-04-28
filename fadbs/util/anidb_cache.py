@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 
 from bs4 import BeautifulSoup
-
 from flexget.logger import FlexGetLogger
 from flexget.utils.soup import get_soup
 

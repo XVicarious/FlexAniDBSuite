@@ -2,18 +2,17 @@ import gzip
 import logging
 import os
 import re
-import sys
 from datetime import datetime, timedelta
+from functools import reduce
 from http import HTTPStatus
 from typing import Dict, Optional
-
-from fuzzywuzzy import process as fw_process
-from sqlalchemy.orm import Session as SQLSession
 
 from flexget import plugin
 from flexget.logger import FlexGetLogger
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
+from fuzzywuzzy import process as fw_process
+from sqlalchemy.orm import Session as SQLSession
 
 from .. import BASE_PATH
 from .anidb_parse import AnidbParser
@@ -96,7 +95,7 @@ class AnidbSearch(object):
         # type is i+1 of title_types
         # convert to dict keys are aid, value is an AnimeTitle
         animes: Dict = self.psv_to_dict()
-        if not len(animes):
+        if not animes:
             log.warning('We did not get any anime, bailing')
             return
         for anidb_id, anime in animes.items():
@@ -110,7 +109,7 @@ class AnidbSearch(object):
                 new_title = AnimeTitle(title_itself, title[1], title[0], db_anime.id_)
                 title_exists = False
                 for title2 in db_anime.titles:
-                    if (title2 == new_title):
+                    if title2 == new_title:
                         log.trace('%s exists in the database, skipping.', title_itself)
                         title_exists = True
                         break
@@ -182,7 +181,11 @@ class AnidbSearch(object):
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
-                titles = session.query(AnimeTitle).filter(AnimeTitle.name.like('% '+title_part+' %') for title_part in name.split(' ') if title_part not in self.particle_words['x-jat']).all()
+                like_gen = [
+                    AnimeTitle.name.like('% '+title_part+' %') for title_part in name.split(' ')\
+                    if title_part not in self.particle_words['x-jat']
+                ]
+                titles = session.query(AnimeTitle).filter(reduce(set.union, like_gen)).all()
                 match = fw_process.extractOne(name, titles)
                 log.debug('%s: %s, %s', match[0], match[1], name)
                 if match and match[1] >= 90:

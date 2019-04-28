@@ -135,7 +135,7 @@ class FadbsSeriesNfo(object):
             aid = int(aid)
             name, weight = tag_info
             log.trace('%s: %s, weight %s', aid, name, weight)
-            if aid in self.default_genres.keys() or genre_weight <= weight:
+            if aid in self.default_genres.keys() and genre_weight <= weight:
                 g_and_t[0].append(name)
                 log.debug('Added %s as a genre', name)
                 continue

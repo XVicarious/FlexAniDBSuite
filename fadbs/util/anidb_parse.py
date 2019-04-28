@@ -5,13 +5,12 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 from bs4 import BeautifulSoup
-from requests import HTTPError
-from sqlalchemy import orm as sa_orm
-
 from flexget import plugin
 from flexget.logger import FlexGetLogger
 from flexget.manager import manager
 from flexget.utils import requests
+from requests import HTTPError
+from sqlalchemy import orm as sa_orm
 
 from .anidb_cache import cached_anidb
 from .anidb_parse_episodes import AnidbParserEpisodes

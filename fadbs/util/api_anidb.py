@@ -2,13 +2,12 @@
 import logging
 from datetime import datetime, timedelta
 
+from flexget import db_schema
+from flexget.components.parsing.parsers.parser_common import remove_dirt
+from flexget.db_schema import Meta, UpgradeImpossible
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
-
-from flexget import db_schema
-from flexget.db_schema import Meta, UpgradeImpossible
-from flexget.components.parsing.parsers.parser_common import remove_dirt
 
 SCHEMA_VER = 1
 
@@ -76,8 +75,6 @@ class Anime(Base):
         if self.updated is None:
             return True
         tdelta = datetime.utcnow() - self.updated
-        entry_age = datetime.utcnow() - self.updated
-        is_week_old = entry_age >= timedelta(days=7)
         if tdelta >= timedelta(1):
             return True
         log.debug('This entry will expire in: %s seconds', timedelta(1) - tdelta)

@@ -112,7 +112,8 @@ class FadbsLookup(object):
 
         # todo: trace log attributes?
         if series:
-            session.add(series)
+            if not session.object_session(series):
+                session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
                 entry_id = str(entry['series_id'])

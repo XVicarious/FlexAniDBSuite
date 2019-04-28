@@ -1,5 +1,6 @@
 """FADBS."""
 import pathlib
+
 from flexget.manager import manager
 
 BASE_PATH = pathlib.Path(manager.config_base, '.fadbs')

@@ -46,6 +46,11 @@ class EveryAnime(FilterSeriesBase):
     titles_main = None  #: List[Tuple[int, str]]
     titles_all = None  #: List[Tuple[int, str]]
 
+    def available_titles(self, series_titles, anidb_id):
+        return [
+            title for title in series_titles if self.title_available(title, anidb_id)
+        ]
+
     @with_session
     def gen_titles_main(self, session=None):
         """Generate a list of all anime titles in the database."""
@@ -116,9 +121,7 @@ class EveryAnime(FilterSeriesBase):
                 s_entry['set'] = {'anidb_id': anidb_id}
                 s_entry['alternate_name'] = []
                 series_titles: List[str] = list({clean_value(title.name) for title in anime.titles})
-                for title in series_titles:
-                    if self.title_available(title, anidb_id):
-                        s_entry['alternate_name'].append(title)
+                s_entry['alternate_name'] += self.available_titles(series_titles, anidb_id)
                 s_entry['prefer_specials'] = False
                 s_entry['assume_special'] = True
                 s_entry['identified_by'] = 'sequence'
@@ -133,7 +136,7 @@ class EveryAnime(FilterSeriesBase):
                     if anidb_id in config['fixes'].keys() and key in config['fixes'][anidb_id]:
                         fixed_setting = self.set_settings_key(config.get('fixes'), key, schema, name, anidb_id)
                         if key in s_entry and isinstance(s_entry[key], list):
-                            s_entry[key].append(fixed_setting)
+                            s_entry[key] += fixed_setting if isinstance(fixed_setting, list) else [fixed_setting]
                             continue
                         s_entry[key] = fixed_setting
 

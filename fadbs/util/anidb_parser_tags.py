@@ -3,10 +3,9 @@ import logging
 from typing import List
 
 from bs4 import Tag
-from sqlalchemy.orm import Session
-
 from flexget import plugin
 from flexget.logger import FlexGetLogger
+from sqlalchemy.orm import Session
 
 from .anidb_structs import DEFAULT_TAG_BLACKLIST
 from .api_anidb import Anime, AnimeGenre, AnimeGenreAssociation
@@ -79,7 +78,7 @@ class AnidbParserTags(object):
             name = tag.find('name').string if tag.find('name') else ''
             db_tag = self._get_tag(int(tag['id']), name)
             tag_parent_id = int(self._select_parentid(tag))
-            if tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys():
+            if tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys() or tag_parent_id and not DEFAULT_TAG_BLACKLIST[tag_parent_id]:
                 parent_tag = self._get_tag(tag_parent_id, None, just_query=True)
                 if parent_tag:
                     db_tag.parent_id = parent_tag.anidb_id
