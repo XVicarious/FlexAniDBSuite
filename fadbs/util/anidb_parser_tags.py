@@ -1,6 +1,6 @@
 """Class to parse AniDB tags."""
 import logging
-from typing import List
+from typing import List, Optional
 
 from bs4 import Tag
 from flexget import plugin
@@ -13,7 +13,7 @@ from .api_anidb import Anime, AnimeGenre, AnimeGenreAssociation
 LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 
 
-class AnidbParserTags(object):
+class AnidbParserTags:
     """Class to parse AniDB tags."""
 
     session: Session
@@ -51,7 +51,7 @@ class AnidbParserTags(object):
             return int(tag['parentid'])
         return 0
 
-    def _get_genre_association(self, tag: Tag, weight: int) -> None:
+    def _get_genre_association(self, tag: Tag, weight: Optional[int]) -> None:
         tag_assoc = self.session.query(AnimeGenreAssociation).filter(
             AnimeGenreAssociation.anime_id == self.series.id_,
             AnimeGenreAssociation.genre_id == tag.id_,
@@ -62,7 +62,7 @@ class AnidbParserTags(object):
         if weight and tag_assoc.weight != weight:
             tag_assoc.weight = weight
 
-    def _get_tag(self, anidb_id: int, name: str, just_query=False) -> AnimeGenre:
+    def _get_tag(self, anidb_id: int, name: Optional[str], just_query=False) -> AnimeGenre:
         db_tag = self.session.query(AnimeGenre).filter(
             AnimeGenre.anidb_id == anidb_id,
         ).first()

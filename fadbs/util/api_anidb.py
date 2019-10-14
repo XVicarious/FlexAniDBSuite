@@ -226,7 +226,7 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id, number, length, airdate, rating, parent):
+    def __init__(self, anidb_id: int, number: str, length: int, airdate: datetime, rating: float, parent: int):
         self.anidb_id = anidb_id
         self.number = number[0]
         self.ep_type = number[1]
