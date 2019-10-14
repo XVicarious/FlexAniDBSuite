@@ -94,6 +94,10 @@ class FadbsLookup(object):
         """Return what field is used to identify the series."""
         return 'anidb_id'
 
+    @property
+    def movie_identifier(self):
+        return self.series_identifier
+
     @plugin.internet(log)
     @with_session
     def lookup(self, entry, session=None):

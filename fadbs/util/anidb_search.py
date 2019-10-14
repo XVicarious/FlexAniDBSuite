@@ -3,7 +3,6 @@ import logging
 import os
 import re
 from datetime import datetime, timedelta
-from functools import reduce
 from http import HTTPStatus
 from typing import Dict, Optional
 
@@ -145,9 +144,7 @@ class AnidbSearch(object):
         log.info('Downloaded new title dump')
 
     @with_session
-    def lookup_series(self,
-                      name: Optional[str] = None, anidb_id: Optional[int] = None,
-                      only_cached=False, session: SQLSession = None):
+    def lookup_series(self, name: Optional[str] = None, anidb_id: Optional[int] = None, only_cached=False, session: SQLSession = None):
         """Lookup an Anime series and return it."""
         if not session:
             raise plugin.PluginError('We weren\'t given a session!')
@@ -181,11 +178,13 @@ class AnidbSearch(object):
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
             if not series:
-                like_gen = [
-                    AnimeTitle.name.like('% '+title_part+' %') for title_part in name.split(' ')\
-                    if title_part not in self.particle_words['x-jat']
-                ]
-                titles = session.query(AnimeTitle).filter(reduce(set.union, like_gen)).all()
+                like_gen = []
+                for title_part in name.split(' '):
+                    if title_part not in self.particle_words['x-jat']:
+                        like_gen += [AnimeTitle.name.like('% {0} %'.format(title_part))]
+                titles = session.query(AnimeTitle).filter(*like_gen).all()
+                if not titles:
+                    return None
                 match = fw_process.extractOne(name, titles)
                 log.debug('%s: %s, %s', match[0], match[1], name)
                 if match and match[1] >= 90:
@@ -205,5 +204,4 @@ class AnidbSearch(object):
             self.cached_anime = series
             return series
 
-        raise plugin.PluginError(
-                'No series found with series name: %s, when was the last time the cache was updated?', name)
+        log.warning('No series found with series name: %s, when was the last time the cache was updated?', name)

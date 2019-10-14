@@ -53,8 +53,9 @@ class AnidbParserTags(object):
 
     def _get_genre_association(self, tag: Tag, weight: int) -> None:
         tag_assoc = self.session.query(AnimeGenreAssociation).filter(
-                AnimeGenreAssociation.anime_id == self.series.id_,
-                AnimeGenreAssociation.genre_id == tag.id_).first()
+            AnimeGenreAssociation.anime_id == self.series.id_,
+            AnimeGenreAssociation.genre_id == tag.id_,
+        ).first()
         if not tag_assoc:
             tag_assoc = AnimeGenreAssociation(tag, weight)
             self.series.genres.append(tag_assoc)
@@ -63,7 +64,8 @@ class AnidbParserTags(object):
 
     def _get_tag(self, anidb_id: int, name: str, just_query=False) -> AnimeGenre:
         db_tag = self.session.query(AnimeGenre).filter(
-                AnimeGenre.anidb_id == anidb_id).first()
+            AnimeGenre.anidb_id == anidb_id,
+        ).first()
         if not (just_query or db_tag):
             LOG.debug('%s is not in the tag list, adding', name)
             db_tag = AnimeGenre(anidb_id, name)
@@ -78,12 +80,16 @@ class AnidbParserTags(object):
             name = tag.find('name').string if tag.find('name') else ''
             db_tag = self._get_tag(int(tag['id']), name)
             tag_parent_id = int(self._select_parentid(tag))
-            if tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys() or tag_parent_id and not DEFAULT_TAG_BLACKLIST[tag_parent_id]:
+            if (tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys() or
+                    tag_parent_id and not DEFAULT_TAG_BLACKLIST[tag_parent_id]):
                 parent_tag = self._get_tag(tag_parent_id, None, just_query=True)
                 if parent_tag:
                     db_tag.parent_id = parent_tag.anidb_id
                 else:
-                    LOG.trace("""Genre %s parent genre, %s is not in the database yet. \
-                              When it is found, it will be added""", name, tag_parent_id)
+                    LOG.trace(
+                        'Genre %s parent genre, %s is not in the database yet. When it is found, it will be added',
+                        name,
+                        tag_parent_id,
+                    )
                 weight = int(tag['weight']) if 'weight' in tag.attrs else None
                 self._get_genre_association(db_tag, weight)

@@ -14,7 +14,7 @@ PLUGIN_ID = 'fadbs_series_nfo'
 log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
-class FadbsSeriesNfo(object):
+class FadbsSeriesNfo():
     """Series NFO plugin object."""
 
     schema = {
@@ -64,15 +64,17 @@ class FadbsSeriesNfo(object):
         2638: True,   # Mecha
         2623: True,   # Super Power
         2887: True,   # Tragedy
-        2614: True,   # Josei
-        1846: True,   # Kodomo
-        2616: True,   # Mina
-        1802: True,   # Seinen
-        1077: True,   # Shoujo
-        922: True,    # Shounen
         2864: True,   # Daily Life
         2869: True,   # School Life
         2881: True,   # Sports
+    }
+    demographic = {
+        922,    # Shounen
+        1077,   # Shoujo
+        1802,   # Seinen
+        1846,   # Kodomo
+        2614,   # Josei
+        2616,   # Mina
     }
 
     def on_task_output(self, task, config):
@@ -106,7 +108,6 @@ class FadbsSeriesNfo(object):
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
                 continue
-            log.info('store: %s', entry.store.get('anidb_episode_number'))
             episode_number = entry.get('anidb_episode_number')
             file_path = entry['location']
             path = file_path[:-3] + 'nfo'
@@ -114,7 +115,6 @@ class FadbsSeriesNfo(object):
             log.info(nfo_path)
             entry['anidb_episode_extra'] = {}
             entry['anidb_episode_extra']['season'] = 1
-            log.info(episode_number)
             if episode_number:
                 try:
                     episode_number = int(episode_number)
@@ -123,11 +123,12 @@ class FadbsSeriesNfo(object):
                     num = re.compile(r'\d+$')
                     log.info('type: %s', type(entry['anidb_episode_number']))
                     episode_number = num.match(entry['anidb_episode_number'])
-                anime_template = template.render_from_entry(
-                    template.get_template(episode_template), entry,
-                )
+                anime_template = template.render_from_entry(template.get_template(episode_template), entry)
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
+
+    def meets_genre_weight(self, weight, genre_weight):
+        return genre_weight <= weight # or weight == 0
 
     def _genres(self, anidb_tags, genre_weight) -> tuple:
         g_and_t = ([], [])
@@ -135,11 +136,15 @@ class FadbsSeriesNfo(object):
             aid = int(aid)
             name, weight = tag_info
             log.trace('%s: %s, weight %s', aid, name, weight)
-            if aid in self.default_genres.keys() and genre_weight <= weight:
+            if aid in self.default_genres.keys() and self.meets_genre_weight(weight, genre_weight):
                 g_and_t[0].append(name)
                 log.debug('Added %s as a genre', name)
                 continue
                 # todo: remove an overridden genre
+            elif aid in self.demographic:
+                g_and_t[0].append(name)
+                log.debug('Added demographic %s as a genre', name)
+                continue
             g_and_t[1].append(name)
         return g_and_t
 

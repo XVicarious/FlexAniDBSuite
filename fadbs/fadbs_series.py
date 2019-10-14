@@ -47,6 +47,7 @@ class EveryAnime(FilterSeriesBase):
     titles_all = None  #: List[Tuple[int, str]]
 
     def available_titles(self, series_titles, anidb_id):
+        """Return all titles from series_titles that are available to be used."""
         return [
             title for title in series_titles if self.title_available(title, anidb_id)
         ]
@@ -54,8 +55,7 @@ class EveryAnime(FilterSeriesBase):
     @with_session
     def gen_titles_main(self, session=None):
         """Generate a list of all anime titles in the database."""
-        titles = session.query(AnimeTitle.name)\
-            .filter(AnimeTitle.ep_type == 'main').all()
+        titles = session.query(AnimeTitle.name).filter(AnimeTitle.ep_type == 'main').all()
         return [title[0] for title in titles]
 
     def title_available(self, title, anidb_id):
@@ -88,8 +88,7 @@ class EveryAnime(FilterSeriesBase):
         """Flexget Prepare method."""
         series: dict = {}
         self.titles_main = self.gen_titles_main()
-        self.titles_all = session.query(Anime.anidb_id, AnimeTitle.name)\
-            .join(Anime.titles).all()
+        self.titles_all = session.query(Anime.anidb_id, AnimeTitle.name).join(Anime.titles).all()
         for input_name, input_config in config.get('from', {}).items():
             input_plugin = plugin.get_plugin_by_name(input_name)
             method = input_plugin.phase_handlers['input']
@@ -107,8 +106,7 @@ class EveryAnime(FilterSeriesBase):
                     LOG.warning('need anidb_id, rip you')
                     continue
                 anidb_id = int(entry['anidb_id'])
-                anime = session.query(Anime).join(AnimeTitle)\
-                    .filter(Anime.anidb_id == anidb_id).first()
+                anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).first()
                 if not anime:
                     LOG.warning('%s (a%s) wasn\'t in the database', entry['title'], anidb_id)
                     continue
