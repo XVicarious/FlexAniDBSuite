@@ -55,7 +55,6 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         'aid': 0,
     }
     anidb_cache_time = timedelta(days=1)
-    anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
 
     def __init__(self, anidb_id: int):
         """Initialize AnidbParser."""
@@ -74,37 +73,29 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
     def requests(self):
         return manager.task_queue.current_task.requests
 
-    @property
-    def is_banned(self) -> Tuple[bool, Optional[datetime]]:
-        """Check if we are banned from AniDB."""
-        banned = False
-        banned_until = None
-        if os.path.exists(self.anidb_ban_file):
-            with open(self.anidb_ban_file, 'r') as aniban:
-                tmp_aniban = aniban.read()
-                if tmp_aniban:
-                    banned_until = datetime.fromtimestamp(float(tmp_aniban))
-                    banned = datetime.now() - banned_until < timedelta(days=1)
-                    aniban.close()
-                if not banned:
-                    os.remove(self.anidb_ban_file)
-        return banned, banned_until
-
     def request_anime(self):
         """Request an anime from AniDB."""
-        if self.is_banned[0]:
+        if CONFIG.is_banned():
             raise plugin.PluginError(
                 'Banned from AniDB until {0}'.format(
-                    self.is_banned[1]))
-        params = self.anidb_params.copy()
+                    CONFIG.banned + timedelta(days=1),
+                ),
+            )
+        # params = self.anidb_params.copy()
+        # params.update(self.anidb_anime_params)
+        # params.update({'aid': self.anidb_iid})
+        if not self.series.is_airing and self.series.end_date and datetime.utcnow() - self.series.end_date > timedelta(days=14):
+            return
         params = {'aid': self.anidb_id}
         if DISABLED:
             LOG.error('Banned from AniDB probably. Ask DerIdiot')
             return
         try:
             page = requests_.get('anidb_lol', params=params)
-        except HTTPError as e:
-            LOG.warning(e)
+            CONFIG.inc_session()
+            CONFIG.update_session()
+        except HTTPError as http_error:
+            LOG.warning(http_error)
             return
         if page:
             page = page.text
@@ -112,13 +103,9 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
             LOG.warning('Rip no page')
             return
         if page == 'banned':
-            time_now = datetime.now().timestamp()
-            with open(self.anidb_ban_file, 'w') as aniban:
-                aniban.write(str(time_now))
-                aniban.close()
-            banned_until = datetime.fromtimestamp(time_now) + timedelta(1)
+            CONFIG.set_banned()
             raise plugin.PluginError(
-                'Banned from AniDB until {0}'.format(banned_until)
+                'Banned from AniDB until {0}'.format(CONFIG.banned + timedelta(days=1)),
             )
         return page
 
