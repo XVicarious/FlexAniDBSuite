@@ -46,7 +46,7 @@ class EveryAnime(FilterSeriesBase):
     titles_main = None  #: List[Tuple[int, str]]
     titles_all = None  #: List[Tuple[int, str]]
 
-    def available_titles(self, series_titles, anidb_id):
+    def available_titles(self, series_titles, anidb_id) -> List:
         """Return all titles from series_titles that are available to be used."""
         return [
             title for title in series_titles if self.title_available(title, anidb_id)
@@ -106,7 +106,7 @@ class EveryAnime(FilterSeriesBase):
                     LOG.warning('need anidb_id, rip you')
                     continue
                 anidb_id = int(entry['anidb_id'])
-                anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id).first()
+                anime = session.query(Anime).join(AnimeTitle).filter(Anime.anidb_id == anidb_id, AnimeTitle.ep_type != 'short').first()
                 if not anime:
                     LOG.warning('%s (a%s) wasn\'t in the database', entry['title'], anidb_id)
                     continue

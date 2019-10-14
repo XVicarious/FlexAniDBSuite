@@ -17,6 +17,7 @@ from .anidb_parse_episodes import AnidbParserEpisodes
 from .anidb_parser_tags import AnidbParserTags
 from .anidb_parsing_interface import AnidbParserTemplate
 from .api_anidb import Anime
+from .config import CONFIG
 
 PLUGIN_ID = 'anidb_parser'
 
@@ -110,7 +111,6 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         else:
             LOG.warning('Rip no page')
             return
-        LOG.info(page)
         if page == 'banned':
             time_now = datetime.now().timestamp()
             with open(self.anidb_ban_file, 'w') as aniban:

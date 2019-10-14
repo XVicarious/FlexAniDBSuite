@@ -1,5 +1,6 @@
 """AniDB Database Table Things."""
 import logging
+import os
 from datetime import datetime, timedelta
 
 from flexget import db_schema
@@ -8,6 +9,9 @@ from flexget.db_schema import Meta, UpgradeImpossible
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
+
+from .. import BASE_PATH
+from .config import CONFIG
 
 SCHEMA_VER = 1
 
@@ -39,8 +43,8 @@ class Anime(Base):
     anidb_id = Column(Integer, unique=True)
     series_type = Column(Unicode)
     num_episodes = Column(Integer)
-    start_date = Column(Date)
-    end_date = Column(Date)
+    start_date: datetime.date = Column(Date)
+    end_date: datetime.date = Column(Date)
     titles = relationship('AnimeTitle', backref='anidb_series')
     # todo: related = relationship('AnimeRelatedAssociation')
     # todo: similar anime, many to many?
@@ -75,7 +79,7 @@ class Anime(Base):
         if self.updated is None:
             return True
         tdelta = datetime.utcnow() - self.updated
-        if tdelta >= timedelta(1):
+        if tdelta >= timedelta(1) and CONFIG.can_request():
             return True
         log.debug('This entry will expire in: %s seconds', timedelta(1) - tdelta)
         return False

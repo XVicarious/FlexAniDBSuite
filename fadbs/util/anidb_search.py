@@ -162,8 +162,6 @@ class AnidbSearch(object):
 
         series = None
 
-        log.verbose('%s: %s', anidb_id, name)
-
         if anidb_id:
             if self.cached_anime and self.cached_anime.anidb_id == anidb_id:
                 log.debug('We have aid%s cached, using it', anidb_id)
