@@ -1,21 +1,20 @@
 """AniDB Database Table Things."""
 import logging
-import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from flexget import db_schema
 from flexget.components.parsing.parsers.parser_common import remove_dirt
-from flexget.db_schema import Meta, UpgradeImpossible
+from flexget.db_schema import Meta, UpgradeImpossible, versioned_base
 from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
-from .. import BASE_PATH
 from .config import CONFIG
+from .utils import Season, get_anime_season
 
 SCHEMA_VER = 1
 
-Base: Meta = db_schema.versioned_base('api_anidb', SCHEMA_VER)
+Base: Meta = versioned_base('api_anidb', SCHEMA_VER)
 
 
 def _table_master(table_name, index_table_name, left_id, right_id):
@@ -43,8 +42,8 @@ class Anime(Base):
     anidb_id = Column(Integer, unique=True)
     series_type = Column(Unicode)
     num_episodes = Column(Integer)
-    start_date: datetime.date = Column(Date)
-    end_date: datetime.date = Column(Date)
+    start_date: date = Column(Date)
+    end_date: date = Column(Date)
     titles = relationship('AnimeTitle', backref='anidb_series')
     # todo: related = relationship('AnimeRelatedAssociation')
     # todo: similar anime, many to many?
@@ -56,8 +55,8 @@ class Anime(Base):
     genres = relationship('AnimeGenreAssociation', back_populates='anime')
     # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
     episodes = relation('AnimeEpisode', secondary=episodes_table, backref='anidb_series')
-    year = Column(Integer)
-    season = Column(String)
+    _year = Column('year', Integer)
+    _season = Column('season', String)
 
     updated = Column(DateTime)
 
@@ -74,7 +73,7 @@ class Anime(Base):
         return remove_dirt(self.title_main)
 
     @property
-    def expired(self):
+    def expired(self) -> bool:
         """Check if we can download a new cache from AniDB, 24 hour hard limit."""
         if self.updated is None:
             return True
@@ -83,6 +82,16 @@ class Anime(Base):
             return True
         log.debug('This entry will expire in: %s seconds', timedelta(1) - tdelta)
         return False
+
+    @property
+    def year(self) -> int:
+        """Return the year that the anime first aired."""
+        return self.start_date.year
+
+    @property
+    def season(self) -> Season:
+        """Return season that the anime first aired."""
+        return get_anime_season(self.start_date.month)
 
     def __repr__(self):
         return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)

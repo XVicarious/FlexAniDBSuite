@@ -42,7 +42,8 @@ class AnidbParserTags:
             if tag['id'] in DEFAULT_TAG_BLACKLIST:
                 LOG.debug('%s (%s) in the blacklist... Taking action.', name, tag['id'])
                 if DEFAULT_TAG_BLACKLIST.get(tag['id']):
-                    LOG.debug('%s (%s) is set to True... Recursively removing tags.', name, tag['id'])
+                    LOG.debug('%s (%s) is set to True... Recursively removing tags.',
+                              name, tag['id'])
                     self._recurse_remove_tags(tags, tag['id'])
                 tags.remove(tag)
 
@@ -87,7 +88,8 @@ class AnidbParserTags:
                     db_tag.parent_id = parent_tag.anidb_id
                 else:
                     LOG.trace(
-                        'Genre %s parent genre, %s is not in the database yet. When it is found, it will be added',
+                        'Genre %s parent genre, %s is not in the database yet. \
+                         When it is found, it will be added',
                         name,
                         tag_parent_id,
                     )
