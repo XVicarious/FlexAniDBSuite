@@ -6,6 +6,7 @@ from bs4 import Tag
 from sqlalchemy.orm import Session
 
 from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeLanguage, AnimeTitle
+from .utils import get_list_tag
 
 
 class AnidbParserEpisodes:
@@ -33,22 +34,18 @@ class AnidbParserEpisodes:
             if anime_title not in self.series.titles:
                 self.series.titles.append(anime_title)
 
-    def _get_list_tag(self, tag: Tag, key: str) -> List[str]:
-        if tag:
-            return [
-                tag.string,
-                tag[key],
-            ]
-        return [None, None]
-
     def _get_episode_attrs(self, episode: Tag) -> Dict:
         # anidb_id, number, length, airdate, rating, parent
         attrs = {
             'anidb_id': int(episode['id']),
-            'number': self._get_list_tag(episode.find('epno'), 'type'),
             'length': episode.find('length').string if episode.find('length') else None,
-            'rating': self._get_list_tag(episode.find('rating'), 'votes'),
         }
+        epno = episode.find('epno')
+        if epno:
+            attrs['number'] = get_list_tag(epno, 'type')
+        rating = episode.find('rating')
+        if rating:
+            attrs['rating'] = get_list_tag(rating, 'votes')
         airdate = episode.find('airdate')
         if airdate:
             attrs['airdate'] = datetime.strptime(airdate.string, self.date_format).date()

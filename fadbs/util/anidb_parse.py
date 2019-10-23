@@ -10,13 +10,12 @@ from flexget.utils import requests
 from requests import HTTPError
 from sqlalchemy import orm as sa_orm
 
-import utils
-
 from .anidb_cache import cached_anidb
 from .anidb_parse_episodes import AnidbParserEpisodes
 from .anidb_parser_tags import AnidbParserTags
 from .api_anidb import Anime
 from .config import CONFIG
+from .utils import get_date, get_ratings
 
 PLUGIN_ID = 'anidb_parser'
 
@@ -87,8 +86,8 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         # params = self.anidb_params.copy()
         # params.update(self.anidb_anime_params)
         # params.update({'aid': self.anidb_iid})
-        if not self.series.is_airing and self.series.end_date and datetime.utcnow().date() - self.series.end_date > timedelta(days=14):
-            return
+        # if not self.series.is_airing and self.series.end_date and datetime.utcnow().date() - self.series.end_date > timedelta(days=14):
+        #    return
         params = {'aid': self.anidb_id}
         if DISABLED:
             LOG.error('Banned from AniDB probably. Ask DerIdiot')
@@ -146,8 +145,12 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
             self.series.num_episodes = int(num_episodes.string)
 
             LOG.trace('Setting the start and end dates')
-            self.series.start_date = utils.get_date(root.find('startdate'))
-            self.series.end_date = utils.get_date(root.find('enddate'))
+            sdate = root.find('startdate')
+            if sdate:
+                self.series.start_date = get_date(sdate)
+            edate = root.find('enddate')
+            if edate:
+                self.series.end_date = get_date(edate)
 
             LOG.trace('Setting titles')
             self._set_titles(root.find('titles'))
@@ -167,7 +170,7 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
                 self.series.description = description.string
 
             LOG.trace('Setting ratings')
-            ratings_dict = utils.get_ratings(root.find('ratings'))
+            ratings_dict = get_ratings(root.find('ratings'))
             if hasattr(ratings_dict, 'permanent'):
                 self.series.permanent_rating = ratings_dict['permanent']
             if hasattr(ratings_dict, 'mean'):

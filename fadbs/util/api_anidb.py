@@ -1,6 +1,7 @@
 """AniDB Database Table Things."""
 import logging
 from datetime import date, datetime, timedelta
+from typing import List
 
 from flexget import db_schema
 from flexget.components.parsing.parsers.parser_common import remove_dirt
@@ -92,6 +93,20 @@ class Anime(Base):
     def season(self) -> Season:
         """Return season that the anime first aired."""
         return get_anime_season(self.start_date.month)
+
+    @property
+    def is_airing(self) -> bool:
+        """Check if this anime is currently on the air."""
+        now = datetime.utcnow().date()
+        if self.start_date and now - self.start_date >= timedelta(0):
+            if not self.end_date or now - self.end_date <= timedelta(0):
+                return True
+        return False
+
+    @property
+    def upgradability(self):
+        """Check how upgradable this anime metadata is (0,1]."""
+        return int(self.is_airing)
 
     def __repr__(self):
         return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
@@ -235,14 +250,16 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id: int, number: str, length: int, airdate: datetime, rating: float, parent: int):
+    def __init__(self, anidb_id: int, number: List, length: int, airdate: datetime, rating: List, parent: int):
         self.anidb_id = anidb_id
-        self.number = number[0]
-        self.ep_type = number[1]
+        if number:
+            self.number = number[0]
+            self.ep_type = number[1]
         self.length = length
         self.airdate = airdate
-        self.rating = rating[0]
-        self.votes = rating[1]
+        if rating:
+            self.rating = rating[0]
+            self.votes = rating[1]
         self.parent_id = parent
 
 
@@ -256,7 +273,7 @@ class AnimeEpisodeTitle(Base):
     title = Column(Unicode)
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
 
-    def __init__(self, parent_id, title, langauge):
+    def __init__(self, parent_id: int, title: str, langauge):
         self.parent_id = parent_id
         self.title = title
         self.language = langauge

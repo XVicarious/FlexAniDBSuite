@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .anidb_structs import DEFAULT_TAG_BLACKLIST
 from .api_anidb import Anime, AnimeGenre, AnimeGenreAssociation
+from .utils import select_parentid
 
 LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 
@@ -20,7 +21,7 @@ class AnidbParserTags:
     series: Anime
 
     def _recurse_remove_tags(self, tags: List[Tag], tag_id: int) -> None:
-        intermediate_tags = [tag_id]
+        intermediate_tags: List[int] = [tag_id]
         idx = 0
         while idx < len(tags):
             tmp_tag = tags[idx]
@@ -47,11 +48,6 @@ class AnidbParserTags:
                     self._recurse_remove_tags(tags, tag['id'])
                 tags.remove(tag)
 
-    def _select_parentid(self, tag: Tag) -> int:
-        if 'parentid' in tag.attrs:
-            return int(tag['parentid'])
-        return 0
-
     def _get_genre_association(self, tag: Tag, weight: Optional[int]) -> None:
         tag_assoc = self.session.query(AnimeGenreAssociation).filter(
             AnimeGenreAssociation.anime_id == self.series.id_,
@@ -76,11 +72,11 @@ class AnidbParserTags:
         if tags_tags is None:
             return plugin.PluginError('tags_tags is None')
         self._remove_blacklist_tags(tags_tags)
-        tags_list = sorted(tags_tags, key=self._select_parentid)
+        tags_list = sorted(tags_tags, key=select_parentid)
         for tag in tags_list:
             name = tag.find('name').string if tag.find('name') else ''
             db_tag = self._get_tag(int(tag['id']), name)
-            tag_parent_id = int(self._select_parentid(tag))
+            tag_parent_id = int(select_parentid(tag))
             if (tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys() or
                     tag_parent_id and not DEFAULT_TAG_BLACKLIST[tag_parent_id]):
                 parent_tag = self._get_tag(tag_parent_id, None, just_query=True)

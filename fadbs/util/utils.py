@@ -1,8 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""Functions for parsing AniDB metadata."""
 import math
 from datetime import date, datetime
-from typing import NewType
+from typing import List, NewType
 
 from bs4 import Tag
 
@@ -22,6 +21,7 @@ def get_anime_season(month: int) -> Season:
 
 
 def get_date(date_tag: Tag) -> date:
+    """Convert a string to a date object."""
     parts = date_tag.string.split('-')
     if len(parts) == 3:
         return datetime.strptime(date_tag.string, '%Y-%m-%d').date()
@@ -38,3 +38,18 @@ def get_ratings(ratings_tag: Tag) -> dict:
         if mean:
             ratings['mean'] = float(mean.string)
     return ratings
+
+
+def select_parentid(tag: Tag) -> int:
+    """Extract and return a parent id from a tag."""
+    if 'parentid' in tag.attrs:
+        return int(tag['parentid'])
+    return 0
+
+
+def get_list_tag(tag: Tag, key: str) -> List:
+    """Lazy get a value and name of a tag."""
+    return [
+        tag.string,
+        tag[key],
+    ]
