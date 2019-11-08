@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import List, Tuple
 
 from flexget import plugin
 from flexget.event import event
@@ -104,7 +105,7 @@ class FadbsSeriesNfo():
                     entry['fadbs_nfo'].update(genres=genres)
                     entry['fadbs_nfo'].update(tags=tags)
                 anime_template = template.render_from_entry(template.get_template(filename), entry)
-                nfo_path = os.path.join(entry['location'], 'tvshow.nfo')
+                nfo_path = entry['location'] / 'tvshow.nfo'
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
                 continue
@@ -127,11 +128,11 @@ class FadbsSeriesNfo():
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
 
-    def meets_genre_weight(self, weight, genre_weight):
-        return genre_weight <= weight # or weight == 0
+    def meets_genre_weight(self, weight: int, genre_weight: int) -> bool:
+        return genre_weight <= weight  # or weight == 0
 
-    def _genres(self, anidb_tags, genre_weight) -> tuple:
-        g_and_t = ([], [])
+    def _genres(self, anidb_tags, genre_weight) -> Tuple:
+        g_and_t: Tuple[List[str], List[str]] = ([], [])
         for aid, tag_info in anidb_tags:
             aid = int(aid)
             name, weight = tag_info

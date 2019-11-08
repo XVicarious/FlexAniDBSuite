@@ -18,9 +18,9 @@
     <episode>{{ anidb_num_episodes }}</episode> {# number of episodes #}
     <runtime></runtime>
     {% for genre in fadbs_nfo['genres'] %}
-        <genre>{{ genre }}</genre>
+    <genre>{{ genre }}</genre>
     {% endfor %}
     {% for tag in fadbs_nfo['tags'] %}
-        <tag>{{ tag }}</tag>
+    <tag>{{ tag }}</tag>
     {% endfor %}
 </tvshow>

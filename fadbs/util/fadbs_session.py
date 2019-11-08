@@ -5,7 +5,13 @@ from sqlalchemy import orm as sa_orm
 
 class FadbsSession:
 
-    _session: sa_orm.Session
+    _session: sa_orm.Session = None
+
+    def __init__(self, new_manager=None):
+        if new_manager:
+            self.manager = new_manager
+        else:
+            self.manager = manager
 
     @property
     def requests(self) -> Requests:
@@ -17,6 +23,6 @@ class FadbsSession:
         """Return a database session for FADBS."""
         if not self._session:
             session = sa_orm.sessionmaker(class_=sa_orm.Session)
-            session.configure(bind=manager.engine, expire_on_commit=False)
+            session.configure(bind=self.manager.engine, expire_on_commit=False)
             self._session = session()
         return self._session

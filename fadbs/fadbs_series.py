@@ -155,7 +155,7 @@ class EveryAnime(FilterSeriesBase):
             LOG.info('no seiries :(')
             return
 
-        series_config = {'anime': [{[x]} for x in series.items()]}
+        series_config = {'anime': [dict([x]) for x in series.items()]}
         if 'settings' in config:
             series_config['settings'] = {'anime': config['settings']}
         self.merge_config(task, series_config)

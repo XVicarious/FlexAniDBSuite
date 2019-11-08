@@ -39,13 +39,14 @@ class AnidbParserTags:
         for tag in temp_tags:
             name = tag.find('name')
             name = name.string if name else ''
-            LOG.trace('Checking %s (%s)', name, tag['id'])
-            if tag['id'] in DEFAULT_TAG_BLACKLIST:
-                LOG.debug('%s (%s) in the blacklist... Taking action.', name, tag['id'])
-                if DEFAULT_TAG_BLACKLIST.get(tag['id']):
+            tag_id = tag['id']
+            LOG.trace('Checking %s (%s)', name, tag_id)
+            if tag_id in DEFAULT_TAG_BLACKLIST:
+                LOG.debug('%s (%s) in the blacklist... Taking action.', name, tag_id)
+                if DEFAULT_TAG_BLACKLIST.get(tag_id):
                     LOG.debug('%s (%s) is set to True... Recursively removing tags.',
-                              name, tag['id'])
-                    self._recurse_remove_tags(tags, tag['id'])
+                              name, tag_id)
+                    self._recurse_remove_tags(tags, tag_id)
                 tags.remove(tag)
 
     def _get_genre_association(self, tag: Tag, weight: Optional[int]) -> None:
@@ -63,14 +64,13 @@ class AnidbParserTags:
         db_tag = self.session.query(AnimeGenre).filter(
             AnimeGenre.anidb_id == anidb_id,
         ).first()
-        if not (just_query or db_tag):
-            LOG.debug('%s is not in the tag list, adding', name)
-            db_tag = AnimeGenre(anidb_id, name)
+        if not db_tag or not just_query:
+            if name:
+                LOG.debug('%s is not in the tag list, adding', name)
+                return AnimeGenre(anidb_id, name)
         return db_tag
 
     def _set_tags(self, tags_tags: List[Tag]) -> None:
-        if tags_tags is None:
-            return plugin.PluginError('tags_tags is None')
         self._remove_blacklist_tags(tags_tags)
         tags_list = sorted(tags_tags, key=select_parentid)
         for tag in tags_list:

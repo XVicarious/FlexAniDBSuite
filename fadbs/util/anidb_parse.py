@@ -1,6 +1,7 @@
 """In charge of fetching and parsing anime from AniDB."""
 import logging
 from datetime import datetime, timedelta
+from typing import Optional
 
 from bs4 import BeautifulSoup
 from flexget import plugin

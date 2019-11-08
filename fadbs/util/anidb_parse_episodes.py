@@ -20,9 +20,7 @@ class AnidbParserEpisodes:
     def _find_lang(self, lang_name: str) -> AnimeLanguage:
         lang = self.session.query(AnimeLanguage).filter(
             AnimeLanguage.name == lang_name).first()
-        if not lang:
-            lang = AnimeLanguage(lang_name)
-        return lang
+        return lang or AnimeLanguage(lang_name)
 
     def _set_titles(self, titles_tag: Tag) -> None:
         if not titles_tag:

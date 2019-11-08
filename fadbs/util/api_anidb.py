@@ -1,7 +1,7 @@
 """AniDB Database Table Things."""
 import logging
-from datetime import date, datetime, timedelta
-from typing import List
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
 from flexget import db_schema
 from flexget.components.parsing.parsers.parser_common import remove_dirt
@@ -11,7 +11,7 @@ from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
 from .config import CONFIG
-from .utils import Season, get_anime_season
+from .utils import SEASONS, Season, get_anime_season
 
 SCHEMA_VER = 1
 
@@ -43,8 +43,8 @@ class Anime(Base):
     anidb_id = Column(Integer, unique=True)
     series_type = Column(Unicode)
     num_episodes = Column(Integer)
-    start_date: date = Column(Date)
-    end_date: date = Column(Date)
+    start_date = Column(Date)
+    end_date = Column(Date)
     titles = relationship('AnimeTitle', backref='anidb_series')
     # todo: related = relationship('AnimeRelatedAssociation')
     # todo: similar anime, many to many?
@@ -62,21 +62,21 @@ class Anime(Base):
     updated = Column(DateTime)
 
     @property
-    def title_main(self):
+    def title_main(self) -> str:
         """Title Considered the "Main" Title on AniDB."""
         for title in self.titles:
             if title.ep_type == 'main':
                 return title.name
 
     @property
-    def clean_title_main(self):
+    def clean_title_main(self) -> str:
         """Title cleaned for use as a series name."""
         return remove_dirt(self.title_main)
 
     @property
     def expired(self) -> bool:
         """Check if we can download a new cache from AniDB, 24 hour hard limit."""
-        if self.updated is None:
+        if not self.updated:
             return True
         tdelta = datetime.utcnow() - self.updated
         if tdelta >= timedelta(1) and CONFIG.can_request():
@@ -87,11 +87,15 @@ class Anime(Base):
     @property
     def year(self) -> int:
         """Return the year that the anime first aired."""
+        if not self.start_date:
+            return self._year
         return self.start_date.year
 
     @property
     def season(self) -> Season:
         """Return season that the anime first aired."""
+        if not self.start_date:
+            return SEASONS[SEASONS.index(self._season)]
         return get_anime_season(self.start_date.month)
 
     @property
@@ -124,7 +128,8 @@ class AnimeGenreAssociation(Base):
     genre = relationship('AnimeGenre', back_populates='anime')
     anime = relationship('Anime', back_populates='genres')
 
-    def __init__(self, genre, weight):
+    def __init__(self, genre, weight: Optional[int]):
+        """Set the genre (or tag) and the weight of it."""
         self.genre = genre
         self.weight = weight
 
@@ -141,7 +146,8 @@ class AnimeGenre(Base):
     children = relationship('AnimeGenre')
     parent_id = Column(Integer, ForeignKey('anidb_genres.anidb_id'))
 
-    def __init__(self, anidb_id, name):
+    def __init__(self, anidb_id: int, name: str):
+        """Set up a genre (aka tag)."""
         self.anidb_id = anidb_id
         self.name = name
 
@@ -169,7 +175,8 @@ class AnimeCreator(Base):
     name = Column(Unicode)
     jp_name = Column(Unicode)
 
-    def __init__(self, anidb_id, creator_type, name):
+    def __init__(self, anidb_id: int, creator_type, name: str):
+        """Set up a person or entity that did something."""
         self.anidb_id = anidb_id
         self.creator_type = creator_type
         self.name = name
@@ -189,7 +196,8 @@ class AnimeCharacter(Base):
     # todo: mapping of characters to animes
     # todo: mapping of characters to episodes
 
-    def __init__(self, anidb_id, names):
+    def __init__(self, anidb_id: int, names: Dict[str, str]):
+        """Set up a character from an anime."""
         self.anidb_id = anidb_id
         self.jp_name = names['official']
         self.main_name = names['main']
@@ -206,7 +214,8 @@ class AnimeTitle(Base):
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
     ep_type = Column(Unicode)
 
-    def __init__(self, name, language, ep_type, parent):
+    def __init__(self, name: str, language, ep_type: str, parent):
+        """Set up a title for a show or movie."""
         self.name = name
         self.language = language
         self.ep_type = ep_type
@@ -230,7 +239,8 @@ class AnimeLanguage(Base):
     id_ = Column('id', Integer, primary_key=True)
     name = Column(Unicode)
 
-    def __init__(self, language):
+    def __init__(self, language: str):
+        """Set up a language object."""
         self.name = language
 
 
@@ -250,7 +260,8 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id: int, number: List, length: int, airdate: datetime, rating: List, parent: int):
+    def __init__(self, anidb_id: int, length: int, airdate: Optional[datetime], parent: int, number: Optional[List] = None, rating: Optional[List] = None):
+        """Set up an episode of an Anime."""
         self.anidb_id = anidb_id
         if number:
             self.number = number[0]
@@ -274,6 +285,7 @@ class AnimeEpisodeTitle(Base):
     language = Column(Unicode, ForeignKey('anidb_languages.name'))
 
     def __init__(self, parent_id: int, title: str, langauge):
+        """Set up a title for an episode of an Anime."""
         self.parent_id = parent_id
         self.title = title
         self.language = langauge

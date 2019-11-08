@@ -23,8 +23,9 @@ def get_anime_season(month: int) -> Season:
 def get_date(date_tag: Tag) -> date:
     """Convert a string to a date object."""
     parts = date_tag.string.split('-')
-    if len(parts) == 3:
-        return datetime.strptime(date_tag.string, '%Y-%m-%d').date()
+    if len(parts) != 3:
+        raise ValueError()
+    return datetime.strptime(date_tag.string, '%Y-%m-%d').date()
 
 
 def get_ratings(ratings_tag: Tag) -> dict:
