@@ -60,14 +60,17 @@ class AnidbParserTags:
         if weight and tag_assoc.weight != weight:
             tag_assoc.weight = weight
 
-    def _get_tag(self, anidb_id: int, name: Optional[str], just_query=False) -> AnimeGenre:
-        db_tag = self.session.query(AnimeGenre).filter(
+    def _query_tag(self, anidb_id: int) -> Optional[AnimeGenre]:
+        tag = self.session.query(AnimeGenre).filter(
             AnimeGenre.anidb_id == anidb_id,
         ).first()
-        if not db_tag or not just_query:
-            if name:
-                LOG.debug('%s is not in the tag list, adding', name)
-                return AnimeGenre(anidb_id, name)
+        return tag
+
+    def _get_tag(self, anidb_id: int, name: str, just_query=False) -> AnimeGenre:
+        db_tag = self._query_tag(anidb_id)
+        if not db_tag and not just_query:
+            LOG.debug('%s is not in the tag list, adding', name)
+            return AnimeGenre(anidb_id, name)
         return db_tag
 
     def _set_tags(self, tags_tags: List[Tag]) -> None:
@@ -79,7 +82,7 @@ class AnidbParserTags:
             tag_parent_id = int(select_parentid(tag))
             if (tag_parent_id and tag_parent_id not in DEFAULT_TAG_BLACKLIST.keys() or
                     tag_parent_id and not DEFAULT_TAG_BLACKLIST[tag_parent_id]):
-                parent_tag = self._get_tag(tag_parent_id, None, just_query=True)
+                parent_tag = self._query_tag(tag_parent_id)
                 if parent_tag:
                     db_tag.parent_id = parent_tag.anidb_id
                 else:

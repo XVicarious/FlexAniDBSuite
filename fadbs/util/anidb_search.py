@@ -36,7 +36,7 @@ class LastLookup:
     anidb_id: int
     name: Optional[str]
 
-    def set(self, anidb_id: int, name: Optional[str]) -> None:
+    def __init__(self, anidb_id: int, name: Optional[str]):
         self.anidb_id = anidb_id
         self.name = name
 
@@ -60,7 +60,7 @@ class AnidbSearch(object):
         'short',
         'official',
     ]
-    last_lookup: LastLookup = LastLookup()
+    last_lookup: LastLookup = None
     cached_anime = None
 
     def __init__(self):
@@ -169,12 +169,10 @@ class AnidbSearch(object):
             if not db_anime:
                 db_anime = Anime(anidb_id=anidb_id)
                 session.add(db_anime)
-            add_titles: List[AnimeTitle] = []
             for title in anime:
                 generated_title = self.generate_title(db_anime.id_, title, db_anime.titles)
                 if generated_title:
-                    db_anime.titles += generated_title
-            db_anime.titles += add_titles
+                    db_anime.titles += [generated_title]
         session.commit()
 
     def _make_xml_junk(self) -> None:
@@ -220,7 +218,7 @@ class AnidbSearch(object):
             raise plugin.PluginError('anidb_id and name are both None, cannot continue.')
         # Check if we previously looked up this title.
         # todo: expand this to not only store the last lookup, also possibly persist this?
-        if not anidb_id and name == self.last_lookup.name:
+        if not anidb_id and self.last_lookup and name == self.last_lookup.name:
             log.debug('anidb_id is not set, but the series_name is a match to the previous lookup')
             log.debug('setting anidb_id for %s to %s', name, self.last_lookup.anidb_id)
             anidb_id = self.last_lookup.anidb_id
@@ -236,7 +234,7 @@ class AnidbSearch(object):
                 query = session.query(Anime)
                 query = query.filter(Anime.anidb_id == anidb_id)
                 series = query.first()
-                log.verbose(series)
+                log.debug(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
             series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
@@ -261,7 +259,7 @@ class AnidbSearch(object):
                 series = parser.series
                 log.debug(series)
             if not anidb_id:
-                self.last_lookup.set(series.anidb_id, name)
+                self.last_lookup = LastLookup(series.anidb_id, name)
             return series
 
         log.warning('No series found with series name: %s, when was the last time the cache was updated?', name)

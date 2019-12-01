@@ -1,10 +1,11 @@
 """Holds parsing functions for episodes."""
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from bs4 import Tag
 from sqlalchemy.orm import Session
 
+from .anidb_parser_new import AnidbEpisode
 from .api_anidb import Anime, AnimeEpisode, AnimeEpisodeTitle, AnimeLanguage, AnimeTitle
 from .utils import get_list_tag
 
@@ -49,13 +50,35 @@ class AnidbParserEpisodes:
             attrs['airdate'] = datetime.strptime(airdate.string, self.date_format).date()
         return attrs
 
-    def _get_episode_titles(self, episode_id: int, episode_titles: List[Tag]) -> List[AnimeEpisodeTitle]:
+    def _get_episode_titles(self,
+                            episode_id: int,
+                            episode_titles: List[Tag],
+                            ) -> List[AnimeEpisodeTitle]:
         titles: List = []
         for title in episode_titles:
             lang = self._find_lang(title['xml:lang'])
             anime_episode_title = AnimeEpisodeTitle(episode_id, title.string, lang.name)
             titles.append(anime_episode_title)
         return titles
+
+    def _find_episode(self, anidb_id: int) -> Optional[AnimeEpisode]:
+        return self.session.query(AnimeEpisode).filter(AnimeEpisode.anidb_id == anidb_id).first()
+
+    def _set_episodes2(self, episodes: List[AnidbEpisode]) -> List[AnimeEpisode]:
+        set_episodes = []
+        for episode in episodes:
+            if self._find_episode(episode.anidb_id):
+                continue
+            set_episodes += [
+                AnimeEpisode(
+                    anidb_id=episode.anidb_id,
+                    length=episode.length,
+                    airdate=episode.airdate,
+                    number=episode.epno[0],
+                    rating=episode.rating[0],
+                ),
+            ]
+        return set_episodes
 
     def _set_episodes(self, episodes_tag: Tag) -> None:
         if not episodes_tag:

@@ -105,7 +105,7 @@ class FadbsSeriesNfo():
                     entry['fadbs_nfo'].update(genres=genres)
                     entry['fadbs_nfo'].update(tags=tags)
                 anime_template = template.render_from_entry(template.get_template(filename), entry)
-                nfo_path = entry['location'] / 'tvshow.nfo'
+                nfo_path = Path(entry['location'], 'tvshow.nfo')
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
                 continue

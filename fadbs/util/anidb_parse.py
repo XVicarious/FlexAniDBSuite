@@ -16,7 +16,8 @@ from .anidb_parse_episodes import AnidbParserEpisodes
 from .anidb_parser_tags import AnidbParserTags
 from .api_anidb import Anime
 from .config import CONFIG
-from .utils import get_date, get_ratings
+from .fadbs_session import FadbsSession
+from .anidb_parser_new import AnidbAnime
 
 PLUGIN_ID = 'anidb_parser'
 
@@ -54,15 +55,14 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         'aid': 0,
     }
     anidb_cache_time = timedelta(days=1)
+    fadbs_session: FadbsSession
 
-    def __init__(self, anidb_id: int):
+    def __init__(self, anidb_id: int, fadbs_session: Optional[FadbsSession] = None):
         """Initialize AnidbParser."""
-        if manager:
-            session = sa_orm.sessionmaker(class_=sa_orm.Session)
-            session.configure(bind=manager.engine, expire_on_commit=False)
-            self.session = session()
+        if fadbs_session:
+            self.fadbs_session = fadbs_session
         else:
-            self.session = None
+            self.fadbs_session = FadbsSession()
         self.anidb_id = anidb_id
         self.anidb_anime_params.update(aid=anidb_id)
         self._get_anime()
@@ -73,15 +73,20 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
             self.session.close()
 
     @property
-    def requests(self):
-        return manager.task_queue.current_task.requests
+    def session(self) -> sa_orm.Session:
+        return self.fadbs_session.session
 
-    def request_anime(self):
+    @property
+    def requests(self) -> requests.Session:
+        return self.fadbs_session.requests
+
+    def request_anime(self) -> str:
         """Request an anime from AniDB."""
+        banned_until = CONFIG.banned + timedelta(days=1)
         if CONFIG.is_banned():
             raise plugin.PluginError(
                 'Banned from AniDB until {0}'.format(
-                    CONFIG.banned + timedelta(days=1),
+                    banned_until,
                 ),
             )
         # params = self.anidb_params.copy()
@@ -90,21 +95,16 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         # if not self.series.is_airing and self.series.end_date and datetime.utcnow().date() - self.series.end_date > timedelta(days=14):
         #    return
         params = {'aid': self.anidb_id}
-        if DISABLED:
-            LOG.error('Banned from AniDB probably. Ask DerIdiot')
-            return
         try:
             page = requests_.get('anidb_lol', params=params)
             CONFIG.inc_session()
             CONFIG.update_session()
         except HTTPError as http_error:
-            LOG.warning(http_error)
-            return
-        if page:
-            page = page.text
-        else:
-            LOG.warning('Rip no page')
-            return
+            LOG.warning(http_error.strerror)
+            raise http_error
+        if not page:  # todo I don't know if this statement is needed. I should investigate.
+            raise plugin.PluginWarning("We didn't get a page!")
+        page = page.text
         if page == 'banned':
             CONFIG.set_banned()
             raise plugin.PluginError(
@@ -126,6 +126,8 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')
 
+        parse_anime = AnidbAnime(self.anidb_id, soup)
+
         with self.session.no_autoflush:
             root = soup.find('anime')
 
@@ -135,23 +137,14 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
                 )
 
             LOG.trace('Setting series_type')
-            series_type = root.find('type')
-            if series_type:
-                self.series.series_type = series_type.string
+            self.series.series_type = parse_anime.series_type
 
             LOG.trace('Setting num_episodes')
-            num_episodes = root.find('episodecount')
-            if not num_episodes:
-                self.series.num_episodes = 0
-            self.series.num_episodes = int(num_episodes.string)
+            self.series.num_episodes = parse_anime.episode_count
 
             LOG.trace('Setting the start and end dates')
-            sdate = root.find('startdate')
-            if sdate:
-                self.series.start_date = get_date(sdate)
-            edate = root.find('enddate')
-            if edate:
-                self.series.end_date = get_date(edate)
+            self.series.start_date = parse_anime.startdate
+            self.series.end_date = parse_anime.enddate
 
             LOG.trace('Setting titles')
             self._set_titles(root.find('titles'))
@@ -159,23 +152,16 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
             # todo: similar, related
 
             LOG.trace('Setting urls')
-            official_url = root.find('url')
-            if official_url:
-                self.series.url = official_url.string
+            self.series.url = parse_anime.official_url
 
             # todo: creators
 
             LOG.trace('Setting description')
-            description = root.find('description')
-            if description:
-                self.series.description = description.string
+            self.series.description = parse_anime.description
 
             LOG.trace('Setting ratings')
-            ratings_dict = get_ratings(root.find('ratings'))
-            if hasattr(ratings_dict, 'permanent'):
-                self.series.permanent_rating = ratings_dict['permanent']
-            if hasattr(ratings_dict, 'mean'):
-                self.series.mean_rating = ratings_dict['mean']
+            self.series.permanent_rating = parse_anime.permanent_rating
+            self.series.mean_rating = parse_anime.mean_rating
 
             LOG.trace('Setting tags')
             tags = root.find('tags')
