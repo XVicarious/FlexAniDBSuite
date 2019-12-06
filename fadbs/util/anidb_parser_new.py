@@ -106,7 +106,11 @@ class AnidbAnime:
         titles = self._soup.find('titles')
         self._all_titles = []
         for title in titles.find_all(True, recursive=False):
-            anime_title = {'name': title.string, 'type': title['type'], 'lang': title['xml:lang']}
+            anime_title = {
+                'name': title.string,
+                'type': title['type'],
+                'lang': title['xml:lang'],
+            }
             self._all_titles += [anime_title]
             if anime_title['type'] == 'main':
                 self._title = anime_title['name']
