@@ -112,6 +112,10 @@ class Anime(Base):
         """Check how upgradable this anime metadata is (0,1]."""
         return int(self.is_airing)
 
+    @property
+    def should_update(self):
+        return self.updated and datetime.utcnow().date() - self.updated >= timedelta(month=1)
+
     def __repr__(self):
         return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
 

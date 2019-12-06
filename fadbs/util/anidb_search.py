@@ -10,13 +10,12 @@ from flexget import plugin
 from flexget.logger import FlexGetLogger
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
-from sqlalchemy.orm import Session as SQLSession
-
 from fuzzywuzzy import process as fw_process
+from sqlalchemy.orm import Session as SQLSession
 
 from .. import BASE_PATH
 from .anidb_parse import AnidbParser
-from .api_anidb import Anime, AnimeLanguage, AnimeTitle
+from .api_anidb import Anime, AnimeTitle
 from .path import Path
 
 PLUGIN_ID = 'anidb_search'
@@ -88,14 +87,13 @@ class AnidbSearch(object):
         if line[0] == '#':
             log.trace('Skipping line due to comment')
             return None
-        else:
-            split_line = line.split('|')
-            type_index = int(split_line[1])
-            if len(split_line) < 4 or type_index > 3:
-                if len(split_line) < 4:
-                    log.warning("We don't have all of the information we need, skipping")
-                    log.debug('line: %s', line)
-                return None
+        split_line = line.split('|')
+        type_index = int(split_line[1])
+        if len(split_line) < 4 or type_index > 3:
+            if len(split_line) < 4:
+                log.warning("We don't have all of the information we need, skipping")
+                log.debug('line: %s', line)
+            return None
         try:
             aid = int(split_line[0])
         except ValueError:
