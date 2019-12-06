@@ -28,12 +28,7 @@ DISABLED = False
 requests_ = requests.Session()
 requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
-requests_.add_domain_limiter(
-    requests.TimedLimiter(
-        'api.anidb.net',
-        '3 seconds',
-    ),
-)
+requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds',),)
 
 
 class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
@@ -85,9 +80,7 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         banned_until = CONFIG.banned + timedelta(days=1)
         if CONFIG.is_banned():
             raise plugin.PluginError(
-                'Banned from AniDB until {0}'.format(
-                    banned_until,
-                ),
+                'Banned from AniDB until {0}'.format(banned_until,),
             )
         # params = self.anidb_params.copy()
         # params.update(self.anidb_anime_params)
@@ -96,13 +89,15 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         #    return
         params = {'aid': self.anidb_id}
         try:
-            page = requests_.get('anidb_lol', params=params)
+            page = self.requests.get('https://xvicario.us/anidb', params=params)
             CONFIG.inc_session()
             CONFIG.update_session()
         except HTTPError as http_error:
             LOG.warning(http_error.strerror)
             raise http_error
-        if not page:  # todo I don't know if this statement is needed. I should investigate.
+        if (
+            not page
+        ):  # todo I don't know if this statement is needed. I should investigate.
             raise plugin.PluginWarning("We didn't get a page!")
         page = page.text
         if page == 'banned':
@@ -113,8 +108,9 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         return page
 
     def _get_anime(self) -> None:
-        self.series = self.session.query(Anime)\
-            .filter(Anime.anidb_id == self.anidb_id).first()
+        self.series = (
+            self.session.query(Anime).filter(Anime.anidb_id == self.anidb_id).first()
+        )
         if not self.series:
             raise plugin.PluginError(
                 'Anime not found? When is the last time the cache was updated?',

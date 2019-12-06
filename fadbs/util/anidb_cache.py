@@ -24,6 +24,7 @@ def find_soup(cache_file: Path) -> BeautifulSoup:
 
 def cached_anidb(func):
     """Load an AniDB entry from cache."""
+
     def decorator(*args, **kwargs):
         """Logic behind the decorator."""
         anidb_id = args[0].anidb_id
@@ -42,4 +43,5 @@ def cached_anidb(func):
                 soup = get_soup(raw_page, parser='lxml-xml')
             kwargs.update(soup=soup)
         func(*args, **kwargs)
+
     return decorator

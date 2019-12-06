@@ -6,7 +6,17 @@ from typing import Dict, List, Optional
 from flexget import db_schema
 from flexget.components.parsing.parsers.parser_common import remove_dirt
 from flexget.db_schema import Meta, UpgradeImpossible, versioned_base
-from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Table,
+    Text,
+    Unicode,
+)
 from sqlalchemy.orm import relation, relationship
 from sqlalchemy.schema import ForeignKey, Index
 
@@ -19,14 +29,21 @@ Base: Meta = versioned_base('api_anidb', SCHEMA_VER)
 
 
 def _table_master(table_name, index_table_name, left_id, right_id):
-    return Table(table_name, Base.metadata,
-                 Column(left_id[0], ForeignKey(left_id[1])),
-                 Column(right_id[0], ForeignKey(right_id[1])),
-                 Index(index_table_name, left_id[0], right_id[0]))
+    return Table(
+        table_name,
+        Base.metadata,
+        Column(left_id[0], ForeignKey(left_id[1])),
+        Column(right_id[0], ForeignKey(right_id[1])),
+        Index(index_table_name, left_id[0], right_id[0]),
+    )
 
 
-episodes_table = _table_master('anidb_anime_episodes', 'ix_anidb_anime_episodes',
-                               ['anidb_series_id', 'anidb_series.id'], ['episode_id', 'anidb_episodes.id'])
+episodes_table = _table_master(
+    'anidb_anime_episodes',
+    'ix_anidb_anime_episodes',
+    ['anidb_series_id', 'anidb_series.id'],
+    ['episode_id', 'anidb_episodes.id'],
+)
 Base.register_table(episodes_table)
 
 PLUGIN_ID = 'api_anidb'
@@ -55,7 +72,9 @@ class Anime(Base):
     mean_rating = Column(Float)
     genres = relationship('AnimeGenreAssociation', back_populates='anime')
     # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
-    episodes = relation('AnimeEpisode', secondary=episodes_table, backref='anidb_series')
+    episodes = relation(
+        'AnimeEpisode', secondary=episodes_table, backref='anidb_series'
+    )
     _year = Column('year', Integer)
     _season = Column('season', String)
 
@@ -114,7 +133,9 @@ class Anime(Base):
 
     @property
     def should_update(self):
-        return self.updated and datetime.utcnow().date() - self.updated >= timedelta(month=1)
+        return self.updated and datetime.utcnow().date() - self.updated >= timedelta(
+            month=1
+        )
 
     def __repr__(self):
         return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
@@ -226,13 +247,17 @@ class AnimeTitle(Base):
         self.parent_id = parent
 
     def __eq__(self, other):
-        return (self.parent_id == other.parent_id and
-                self.language == other.language and
-                self.name == other.name and
-                self.ep_type == other.ep_type)
+        return (
+            self.parent_id == other.parent_id
+            and self.language == other.language
+            and self.name == other.name
+            and self.ep_type == other.ep_type
+        )
 
     def __repr__(self):
-        return '<AnimeTitle name="{0}", parent_id={1}>'.format(self.name, self.parent_id)
+        return '<AnimeTitle name="{0}", parent_id={1}>'.format(
+            self.name, self.parent_id
+        )
 
 
 class AnimeLanguage(Base):
@@ -264,7 +289,15 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id: int, length: int, airdate: Optional[datetime], parent: int, number: Optional[List] = None, rating: Optional[List] = None):
+    def __init__(
+        self,
+        anidb_id: int,
+        length: int,
+        airdate: Optional[datetime],
+        parent: int,
+        number: Optional[List] = None,
+        rating: Optional[List] = None,
+    ):
         """Set up an episode of an Anime."""
         self.anidb_id = anidb_id
         if number:
@@ -299,5 +332,9 @@ class AnimeEpisodeTitle(Base):
 def upgrade(ver, session):
     """Upgrade the database when something has changed."""
     if ver is None:
-        raise UpgradeImpossible('Resetting {0} caches because bad data may have been cached.'.format(PLUGIN_ID))
+        raise UpgradeImpossible(
+            'Resetting {0} caches because bad data may have been cached.'.format(
+                PLUGIN_ID
+            )
+        )
     return ver

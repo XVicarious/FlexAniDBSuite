@@ -49,9 +49,11 @@ class Config:
 
     def can_request(self) -> bool:
         """Check if we can request new metadata from the server based off session limits."""
-        return not (self.last_session >= self.max_session and
-                    self.last_time and
-                    datetime.utcnow() - self.last_time >= timedelta(hours=4))
+        return not (
+            self.last_session >= self.max_session
+            and self.last_time
+            and datetime.utcnow() - self.last_time >= timedelta(hours=4)
+        )
 
     def flush(self):
         """Flush settings to disk."""

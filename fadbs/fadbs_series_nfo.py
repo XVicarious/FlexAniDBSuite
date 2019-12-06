@@ -15,29 +15,30 @@ PLUGIN_ID = 'fadbs_series_nfo'
 log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
-class FadbsSeriesNfo():
+class FadbsSeriesNfo:
     """Series NFO plugin object."""
 
     schema = {
         'oneOf': [
             {'type': 'boolean', 'default': False},
-            {'type': 'object',
-             'properties': {
-                 'genre_weight': {'type': 'integer', 'default': 500},
-                 'spoilers': {
-                     'type': 'array',
-                     'items': {'type': 'string', 'enum': ['local', 'global']},
-                 },
-                 'title': {
-                     'type': 'object',
-                     'properties': {
-                         'type': {'type': 'string', 'default': 'main'},
-                         'enum': ['main', 'official', 'synonym', 'short'],
-                         'lang': {'type': 'string', 'default': 'x-jat'},
-                     },
-                 },
-             },
-             },
+            {
+                'type': 'object',
+                'properties': {
+                    'genre_weight': {'type': 'integer', 'default': 500},
+                    'spoilers': {
+                        'type': 'array',
+                        'items': {'type': 'string', 'enum': ['local', 'global']},
+                    },
+                    'title': {
+                        'type': 'object',
+                        'properties': {
+                            'type': {'type': 'string', 'default': 'main'},
+                            'enum': ['main', 'official', 'synonym', 'short'],
+                            'lang': {'type': 'string', 'default': 'x-jat'},
+                        },
+                    },
+                },
+            },
         ],
     }
 
@@ -48,34 +49,34 @@ class FadbsSeriesNfo():
     # todo: don't enforce items to be genres, an anime could have some action but not be
     #       an action anime
     default_genres = {
-        2841: True,   # Action
-        2282: True,   # Martial arts
-        2850: True,   # Adventure
-        2853: True,   # Comedy
-        2655: True,   # Parody
-        2856: True,   # Ecchi
-        2851: True,   # Horror
-        2858: True,   # Romance
+        2841: True,  # Action
+        2282: True,  # Martial arts
+        2850: True,  # Adventure
+        2853: True,  # Comedy
+        2655: True,  # Parody
+        2856: True,  # Ecchi
+        2851: True,  # Horror
+        2858: True,  # Romance
         2849: False,  # Fantasy
-        2648: 2849,   # Contemporary Fantasy
-        2649: 2849,   # Dark Fantasy
-        2647: 2849,   # High Fantasy
-        2094: True,   # Magic
-        2846: True,   # Science Fiction
-        2638: True,   # Mecha
-        2623: True,   # Super Power
-        2887: True,   # Tragedy
-        2864: True,   # Daily Life
-        2869: True,   # School Life
-        2881: True,   # Sports
+        2648: 2849,  # Contemporary Fantasy
+        2649: 2849,  # Dark Fantasy
+        2647: 2849,  # High Fantasy
+        2094: True,  # Magic
+        2846: True,  # Science Fiction
+        2638: True,  # Mecha
+        2623: True,  # Super Power
+        2887: True,  # Tragedy
+        2864: True,  # Daily Life
+        2869: True,  # School Life
+        2881: True,  # Sports
     }
     demographic = {
-        922,    # Shounen
-        1077,   # Shoujo
-        1802,   # Seinen
-        1846,   # Kodomo
-        2614,   # Josei
-        2616,   # Mina
+        922,  # Shounen
+        1077,  # Shoujo
+        1802,  # Seinen
+        1846,  # Kodomo
+        2614,  # Josei
+        2616,  # Mina
     }
 
     def on_task_output(self, task, config):
@@ -99,12 +100,13 @@ class FadbsSeriesNfo():
                 entry['fadbs_nfo']['tags'] = []
                 if entry_tags:
                     genres, tags = self._genres(
-                        entry.get('anidb_tags').items(),
-                        config['genre_weight'],
+                        entry.get('anidb_tags').items(), config['genre_weight'],
                     )
                     entry['fadbs_nfo'].update(genres=genres)
                     entry['fadbs_nfo'].update(tags=tags)
-                anime_template = template.render_from_entry(template.get_template(filename), entry)
+                anime_template = template.render_from_entry(
+                    template.get_template(filename), entry
+                )
                 nfo_path = Path(entry['location'], 'tvshow.nfo')
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
@@ -124,7 +126,9 @@ class FadbsSeriesNfo():
                     num = re.compile(r'\d+$')
                     log.info('type: %s', type(entry['anidb_episode_number']))
                     episode_number = num.match(entry['anidb_episode_number'])
-                anime_template = template.render_from_entry(template.get_template(episode_template), entry)
+                anime_template = template.render_from_entry(
+                    template.get_template(episode_template), entry
+                )
                 with open(nfo_path, 'wb') as nfo:
                     nfo.write(anime_template.encode('utf-8'))
 
@@ -137,7 +141,9 @@ class FadbsSeriesNfo():
             aid = int(aid)
             name, weight = tag_info
             log.trace('%s: %s, weight %s', aid, name, weight)
-            if aid in self.default_genres.keys() and self.meets_genre_weight(weight, genre_weight):
+            if aid in self.default_genres.keys() and self.meets_genre_weight(
+                weight, genre_weight
+            ):
                 g_and_t[0].append(name)
                 log.debug('Added %s as a genre', name)
                 continue

@@ -48,9 +48,7 @@ class AnidbSearch(object):
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
     anidb_json = BASE_PATH / 'anime-titles.yml'
     particle_words = {
-        'x-jat': {
-            'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',
-        },
+        'x-jat': {'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',},
     }
     particle_reg = r'([nwt]?o|[njgw]a|ni)'
     title_types = [
@@ -120,7 +118,9 @@ class AnidbSearch(object):
             try:
                 aid = int(split_line[0])
             except ValueError:
-                log.warning("Can't turn %s into an int, no aid, skipping.", split_line[0])
+                log.warning(
+                    "Can't turn %s into an int, no aid, skipping.", split_line[0]
+                )
                 continue
             type_index = int(split_line[1])
             if type_index > 3:
@@ -132,7 +132,9 @@ class AnidbSearch(object):
         anime_titles.close()
         return anime_dict
 
-    def generate_title(self, anime_id: int, title: List, current_titles) -> Optional[AnimeTitle]:
+    def generate_title(
+        self, anime_id: int, title: List, current_titles
+    ) -> Optional[AnimeTitle]:
         """Generate a title object for an anime if it does not exist and return it.
 
         :param anime_id: database ID for the anime
@@ -162,13 +164,19 @@ class AnidbSearch(object):
             log.warning('We did not get any anime, bailing')
             return
         for anidb_id, anime in animes.items():
-            db_anime = session.query(Anime).join(AnimeTitle)\
-                .filter(Anime.anidb_id == anidb_id).first()
+            db_anime = (
+                session.query(Anime)
+                .join(AnimeTitle)
+                .filter(Anime.anidb_id == anidb_id)
+                .first()
+            )
             if not db_anime:
                 db_anime = Anime(anidb_id=anidb_id)
                 session.add(db_anime)
             for title in anime:
-                generated_title = self.generate_title(db_anime.id_, title, db_anime.titles)
+                generated_title = self.generate_title(
+                    db_anime.id_, title, db_anime.titles
+                )
                 if generated_title:
                     db_anime.titles += [generated_title]
         session.commit()
@@ -177,7 +185,11 @@ class AnidbSearch(object):
         if self.xml_file.exists():
             expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
         if not self.xml_file.exists() or expired:
-            log_msg = 'Cache is expired, %s' if self.xml_file.exists() else 'Cache does not exist, %s'
+            log_msg = (
+                'Cache is expired, %s'
+                if self.xml_file.exists()
+                else 'Cache does not exist, %s'
+            )
             log.info(log_msg, 'downloading now.')
             self.__download_anidb_titles()
             self._load_anime_to_db()
@@ -206,18 +218,29 @@ class AnidbSearch(object):
         return like_gen
 
     @with_session
-    def lookup_series(self, name: Optional[str] = None, anidb_id: Optional[int] = None, only_cached=False, session: SQLSession = None):
+    def lookup_series(
+        self,
+        name: Optional[str] = None,
+        anidb_id: Optional[int] = None,
+        only_cached=False,
+        session: SQLSession = None,
+    ):
         """Lookup an Anime series and return it."""
+        # self.clean_main_titles()
         if not session:
             raise plugin.PluginError("We weren't given a session!")
         self._make_xml_junk()
         # If we don't have an id or a name, we cannot find anything
         if not (anidb_id or name):
-            raise plugin.PluginError('anidb_id and name are both None, cannot continue.')
+            raise plugin.PluginError(
+                'anidb_id and name are both None, cannot continue.'
+            )
         # Check if we previously looked up this title.
         # todo: expand this to not only store the last lookup, also possibly persist this?
         if not anidb_id and self.last_lookup and name == self.last_lookup.name:
-            log.debug('anidb_id is not set, but the series_name is a match to the previous lookup')
+            log.debug(
+                'anidb_id is not set, but the series_name is a match to the previous lookup'
+            )
             log.debug('setting anidb_id for %s to %s', name, self.last_lookup.anidb_id)
             anidb_id = self.last_lookup.anidb_id
 
@@ -235,7 +258,12 @@ class AnidbSearch(object):
                 log.debug(series)
         else:
             log.debug('AniDB id not present, looking up by the title, %s', name)
-            series = session.query(Anime).join(AnimeTitle).filter(AnimeTitle.name == name).first()
+            series = (
+                session.query(Anime)
+                .join(AnimeTitle)
+                .filter(AnimeTitle.name == name)
+                .first()
+            )
             if not series and name:
                 like_gen = self.generate_like_statement(name)
                 titles = session.query(AnimeTitle).filter(*like_gen).all()
@@ -260,4 +288,7 @@ class AnidbSearch(object):
                 self.last_lookup = LastLookup(series.anidb_id, name)
             return series
 
-        log.warning('No series found with series name: %s, when was the last time the cache was updated?', name)
+        log.warning(
+            'No series found with series name: %s, when was the last time the cache was updated?',
+            name,
+        )
