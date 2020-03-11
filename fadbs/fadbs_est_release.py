@@ -1,14 +1,12 @@
-import logging
-
 from flexget import plugin
 from flexget.event import event
 from flexget.utils.database import with_session
 
+from loguru import logger
+
 from .util import ANIDB_SEARCH
 
 PLUGIN_ID = 'fadbs_est_release'
-
-log = logging.getLogger(PLUGIN_ID)
 
 
 class EstimateSeriesAniDb(object):
@@ -36,8 +34,8 @@ class EstimateSeriesAniDb(object):
                 airdate = airdate[0] if airdate else None
                 return airdate
             return None
-        log.debug(
-            '%s did not have the required attributes to search for the episode',
+        logger.debug(
+            '{} did not have the required attributes to search for the episode',
             entry['title'],
         )
 

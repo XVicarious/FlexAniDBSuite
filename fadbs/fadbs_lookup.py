@@ -4,7 +4,7 @@ from typing import Dict
 
 from flexget import plugin
 from flexget.event import event
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
@@ -12,7 +12,6 @@ from .util import ANIDB_SEARCH
 
 PLUGIN_ID: str = 'fadbs_lookup'
 
-log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsLookup(object):
@@ -25,7 +24,7 @@ class FadbsLookup(object):
             if title.ep_type not in titles:
                 titles.update({title.ep_type: []})
             titles[title.ep_type].append(
-                {'lang': title.language, 'name': title.name,}
+                {'lang': title.language, 'name': title.name},
             )
         return titles
 
@@ -79,7 +78,7 @@ class FadbsLookup(object):
         if not config:
             return
         for entry in task.entries:
-            log.debug('Looking up: %s', entry.get('title'))
+            logger.debug('Looking up: {}', entry.get('title'))
             self.register_lazy_fields(entry)
 
     def register_lazy_fields(self, entry):
@@ -105,12 +104,11 @@ class FadbsLookup(object):
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
-
         anidb_id = entry.get('anidb_id')
         series_name = entry.get('series_name')
         location = entry.get('location')
-        log.verbose(
-            '%s: %s (%s) at %s', entry['title'], series_name, anidb_id, location
+        logger.verbose(
+            '{}: {} ({}) at {}', entry['title'], series_name, anidb_id, location,
         )
         series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
 

@@ -7,12 +7,11 @@ from typing import List, Tuple
 
 from flexget import plugin
 from flexget.event import event
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from flexget.utils import template
 
 PLUGIN_ID = 'fadbs_series_nfo'
 
-log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsSeriesNfo:
@@ -81,11 +80,13 @@ class FadbsSeriesNfo:
 
     def on_task_output(self, task, config):
         """Cast a spell to make NFO files."""
-        log.info('Starting fadbs_series_nfo')
+        logger.info('Starting fadbs_series_nfo')
         filename = os.path.expanduser('tvshow.nfo.template')
         episode_template = os.path.expanduser('episode.nfo.template')
         for entry in task.entries:
-            log.debug('Starting nfo generation for %s', entry['title'])
+            if not entry.get('location'):
+                continue
+            logger.debug('Starting nfo generation for %s', entry['title'])
             # Load stuff
             if os.path.isdir(entry['location']):
                 entry['fadbs_nfo'] = {}
@@ -93,7 +94,7 @@ class FadbsSeriesNfo:
                 if entry_titles:
                     entry['fadbs_nfo'].update(title=entry['anidb_title_main'])
                 else:
-                    log.warning('We were not given any titles, skipping...')
+                    logger.warning('We were not given any titles, skipping...')
                     continue
                 entry_tags = entry.get('anidb_tags')
                 entry['fadbs_nfo']['genres'] = []
@@ -115,7 +116,7 @@ class FadbsSeriesNfo:
             file_path = entry['location']
             path = file_path[:-3] + 'nfo'
             nfo_path = Path(path)
-            log.info(nfo_path)
+            logger.info(nfo_path)
             entry['anidb_episode_extra'] = {}
             entry['anidb_episode_extra']['season'] = 1
             if episode_number:
@@ -124,7 +125,7 @@ class FadbsSeriesNfo:
                 except ValueError:
                     entry['anidb_episode_extra']['season'] = 0
                     num = re.compile(r'\d+$')
-                    log.info('type: %s', type(entry['anidb_episode_number']))
+                    logger.info('type: %s', type(entry['anidb_episode_number']))
                     episode_number = num.match(entry['anidb_episode_number'])
                 anime_template = template.render_from_entry(
                     template.get_template(episode_template), entry
@@ -140,17 +141,17 @@ class FadbsSeriesNfo:
         for aid, tag_info in anidb_tags:
             aid = int(aid)
             name, weight = tag_info
-            log.trace('%s: %s, weight %s', aid, name, weight)
+            logger.trace('%s: %s, weight %s', aid, name, weight)
             if aid in self.default_genres.keys() and self.meets_genre_weight(
                 weight, genre_weight
             ):
                 g_and_t[0].append(name)
-                log.debug('Added %s as a genre', name)
+                logger.debug('Added %s as a genre', name)
                 continue
                 # todo: remove an overridden genre
             elif aid in self.demographic:
                 g_and_t[0].append(name)
-                log.debug('Added demographic %s as a genre', name)
+                logger.debug('Added demographic %s as a genre', name)
                 continue
             g_and_t[1].append(name)
         return g_and_t

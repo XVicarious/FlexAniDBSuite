@@ -4,19 +4,19 @@ import logging
 from typing import List
 
 from flexget import plugin
-from flexget.components.parsing.parsers.parser_common import clean_value
-from flexget.components.series.series import FilterSeriesBase
-from flexget.config_schema import process_config
+from flexget.task import Task
 from flexget.entry import Entry
 from flexget.event import event
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from flexget.plugin import PluginError
-from flexget.task import Task
+from flexget.config_schema import process_config
 from flexget.utils.database import with_session
+from flexget.components.series.series import FilterSeriesBase
+from flexget.components.parsing.parsers.parser_common import clean_value
 
 from .util.api_anidb import Anime, AnimeTitle
+from .util.anidb_structs import DEFAULT_SPECIAL_IDS
 
-LOG: FlexGetLogger = logging.getLogger('fadbs_series')
 
 
 class EveryAnime(FilterSeriesBase):
@@ -29,7 +29,7 @@ class EveryAnime(FilterSeriesBase):
             'type': 'object',
             'properties': {
                 'settings': self.settings_schema,
-                'from': {'$ref': '/schema/plugins?phase=input',},
+                'from': {'$ref': '/schema/plugins?phase=input'},
                 'fixes': {
                     'type': ['object', 'array'],
                     'items': {
@@ -62,7 +62,7 @@ class EveryAnime(FilterSeriesBase):
 
     @staticmethod
     def set_settings_key(
-        config_fixes: dict, key: str, schema: dict, name: str, anidb_id: int
+        config_fixes: dict, key: str, schema: dict, name: str, anidb_id: int,
     ):
         """Set a settings key, otherwise yell at the user.
 
@@ -80,30 +80,66 @@ class EveryAnime(FilterSeriesBase):
         fixed_setting = config_fixes[anidb_id][key]
         errors = process_config(fixed_setting, schema, set_defaults=False)
         if errors:
-            LOG.warning('yada yada %s for %s errors %s', key, name, errors)
-        LOG.verbose('%s (%s): {%s: %s}', name, anidb_id, key, fixed_setting)
+            logger.warning('yada yada %s for %s errors %s', key, name, errors)
+        logger.verbose('%s (%s): {%s: %s}', name, anidb_id, key, fixed_setting)
         return fixed_setting
 
     @staticmethod
     def generate_entry_config(entry: Entry, key: str, name: str, schema: dict):
         errors = process_config(
-            entry['anime_series_' + key], schema, set_defaults=False
+            entry['anime_series_' + key], schema, set_defaults=False,
         )
         if not errors:
             return entry['anime_series_' + key]
-        LOG.warning(
-            'Not settings series option %s for %s. errors: %s', key, name, errors
+        logger.warning(
+            'Not settings series option %s for %s. errors: %s', key, name, errors,
         )
         return None
+
+    def generate_series_entry(self, s_entry, anime: Anime, config: dict, name: str, entry: Entry):
+        anidb_id = anime.anidb_id
+        logger.trace('%s: %s', anidb_id, anime.title_main)
+        s_entry['set'] = {'anidb_id': anidb_id}
+        s_entry['alternate_name'] = []
+        series_titles: List[str] = list(
+            {clean_value(title.name) for title in anime.titles},
+        )
+        s_entry['alternate_name'] += self.available_titles(
+            series_titles, anidb_id,
+        )
+        s_entry['prefer_specials'] = False
+        s_entry['assume_special'] = True
+        s_entry['identified_by'] = 'sequence'
+        s_entry['special_ids'] = DEFAULT_SPECIAL_IDS
+
+        for key, schema in self.settings_schema['properties'].items():
+            if 'fixes' not in config:
+                continue
+            if 'anime_series_' + key in entry:
+                s_entry[key] = EveryAnime.generate_entry_config(
+                    entry, key, name, schema,
+                )
+            if (anidb_id in config['fixes'].keys() and
+                    key in config['fixes'][anidb_id]):
+                fixed_setting = self.set_settings_key(
+                    config.get('fixes'), key, schema, name, anidb_id,
+                )
+                if key in s_entry and isinstance(s_entry[key], list):
+                    if not isinstance(fixed_setting, list):
+                        fixed_setting = [fixed_setting]
+                    s_entry[key] += fixed_setting
+                    continue
+                s_entry[key] = fixed_setting
+        return s_entry
 
     @with_session
     def on_task_prepare(self, task: Task, config: dict, session=None):
         """Flexget Prepare method."""
-        series: dict = {}
         self.titles_main = gen_titles_main()
         self.titles_all = (
             session.query(Anime.anidb_id, AnimeTitle.name).join(Anime.titles).all()
         )
+        series: dict = {}
         for input_name, input_config in config.get('from', {}).items():
             input_plugin = plugin.get_plugin_by_name(input_name)
             method = input_plugin.phase_handlers['input']
@@ -111,16 +147,16 @@ class EveryAnime(FilterSeriesBase):
                 input_results = method(task, input_config)
             except PluginError as plugin_error:
                 error_string = str(plugin_error)
-                LOG.warning(
-                    'Error during input plugin %s: %s', input_name, error_string
+                logger.warning(
+                    'Error during input plugin %s: %s', input_name, error_string,
                 )
                 continue
             if not input_results:
-                LOG.warning('Input %s did not return anything', input_name)
+                logger.warning('Input %s did not return anything', input_name)
                 continue
             for entry in input_results:
                 if not entry.get('anidb_id', None):
-                    LOG.warning('need anidb_id, rip you')
+                    logger.warning('need anidb_id, rip you')
                     continue
                 anidb_id = int(entry['anidb_id'])
                 anime = (
@@ -130,58 +166,23 @@ class EveryAnime(FilterSeriesBase):
                     .first()
                 )
                 if not anime:
-                    LOG.warning(
-                        "%s (a%s) wasn't in the database", entry['title'], anidb_id
+                    logger.warning(
+                        "%s (a%s) wasn't in the database", entry['title'], anidb_id,
                     )
                     continue
-                name = clean_value(anime.title_main)
-                if not name:
-                    LOG.warning("%s didn't have a proper series name", entry['title'])
+
+                try:
+                    name = clean_value(anime.title_main)
+                except Exception as e:  # FIXME: use correct exception here
+                    logger.warning(e)
+                    logger.warning("%s didn't have a proper series name", entry['title'])
                     continue
+
                 s_entry = series.setdefault(name, {})
-                LOG.trace('%s: %s', anidb_id, anime.title_main)
-                s_entry['set'] = {'anidb_id': anidb_id}
-                s_entry['alternate_name'] = []
-                series_titles: List[str] = list(
-                    {clean_value(title.name) for title in anime.titles}
-                )
-                s_entry['alternate_name'] += self.available_titles(
-                    series_titles, anidb_id
-                )
-                s_entry['prefer_specials'] = False
-                s_entry['assume_special'] = True
-                s_entry['identified_by'] = 'sequence'
-                s_entry['special_ids'] = [
-                    'OP',
-                    'ED',
-                    'NCOP',
-                    'NCED',
-                    'Creditless OP',
-                    'Creditless ED',
-                ]
-                for key, schema in self.settings_schema['properties'].items():
-                    if 'fixes' not in config:
-                        continue
-                    if 'anime_series_' + key in entry:
-                        s_entry[key] = EveryAnime.generate_entry_config(
-                            entry, key, name, schema
-                        )
-                    if (
-                        anidb_id in config['fixes'].keys()
-                        and key in config['fixes'][anidb_id]
-                    ):
-                        fixed_setting = self.set_settings_key(
-                            config.get('fixes'), key, schema, name, anidb_id
-                        )
-                        if key in s_entry and isinstance(s_entry[key], list):
-                            if not isinstance(fixed_setting, list):
-                                fixed_setting = [fixed_setting]
-                            s_entry[key] += fixed_setting
-                            continue
-                        s_entry[key] = fixed_setting
+                s_entry = self.generate_series_entry(s_entry, anime, config, name, entry)
 
         if not series:
-            LOG.info('no seiries :(')
+            logger.info('no seiries :(')
             return
 
         series_config = {'anime': [dict([x]) for x in series.items()]}
@@ -193,8 +194,13 @@ class EveryAnime(FilterSeriesBase):
 @with_session
 def gen_titles_main(session=None):
     """Generate a list of all anime titles in the database."""
-    titles = session.query(AnimeTitle.name).filter(AnimeTitle.ep_type == 'main').all()
-    return [title[0] for title in titles]
+    titles = reversed(session.query(AnimeTitle).filter(AnimeTitle.ep_type == 'main').all())
+    r_titles = {}
+    for title in titles:
+        if title.parent_id in r_titles.keys():
+            continue
+        r_titles[title.parent_id] = title.name
+    return r_titles
 
 
 @event('plugin.register')

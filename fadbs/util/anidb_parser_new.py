@@ -182,7 +182,9 @@ class AnidbAnime:
     def _get_rating(self, rating_type: str) -> float:
         if '_ratings' not in self.__dict__:
             self._get_ratings()
-        return self._ratings[rating_type][0]
+        if rating_type in self._ratings:
+            return self._ratings[rating_type][0]
+        return None
 
     @property
     def mean_rating(self) -> float:

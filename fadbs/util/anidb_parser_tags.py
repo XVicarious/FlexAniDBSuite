@@ -1,17 +1,14 @@
 """Class to parse AniDB tags."""
-import logging
 from typing import List, Optional
 
 from bs4 import Tag
 from flexget import plugin
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from .anidb_structs import DEFAULT_TAG_BLACKLIST
 from .api_anidb import Anime, AnimeGenre, AnimeGenreAssociation
 from .utils import select_parentid
-
-LOG: FlexGetLogger = logging.getLogger('anidb_parser')
 
 
 class AnidbParserTags:
@@ -42,12 +39,12 @@ class AnidbParserTags:
             name = tag.find('name')
             name = name.string if name else ''
             tag_id = tag['id']
-            LOG.trace('Checking %s (%s)', name, tag_id)
+            logger.trace('Checking %s (%s)', name, tag_id)
             if tag_id in DEFAULT_TAG_BLACKLIST:
-                LOG.debug('%s (%s) in the blacklist... Taking action.', name, tag_id)
+                logger.debug('{} ({}) in the blacklist... Taking action.', name, tag_id)
                 if DEFAULT_TAG_BLACKLIST.get(tag_id):
-                    LOG.debug(
-                        '%s (%s) is set to True... Recursively removing tags.',
+                    logger.debug(
+                        '{} ({}) is set to True... Recursively removing tags.',
                         name,
                         tag_id,
                     )
@@ -80,7 +77,7 @@ class AnidbParserTags:
     def _get_tag(self, anidb_id: int, name: str, just_query=False) -> AnimeGenre:
         db_tag = self._query_tag(anidb_id)
         if not db_tag and not just_query:
-            LOG.debug('%s is not in the tag list, adding', name)
+            logger.debug('{} is not in the tag list, adding', name)
             return AnimeGenre(anidb_id, name)
         return db_tag
 
@@ -101,7 +98,7 @@ class AnidbParserTags:
                 if parent_tag:
                     db_tag.parent_id = parent_tag.anidb_id
                 else:
-                    LOG.trace(
+                    logger.trace(
                         'Genre %s parent genre, %s is not in the database yet. \
                          When it is found, it will be added',
                         name,

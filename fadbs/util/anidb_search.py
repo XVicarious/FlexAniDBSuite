@@ -7,7 +7,7 @@ from http import HTTPStatus
 from typing import Dict, List, Optional, Tuple
 
 from flexget import plugin
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from flexget.utils.database import with_session
 from flexget.utils.requests import Session, TimedLimiter
 from fuzzywuzzy import process as fw_process
@@ -22,8 +22,6 @@ PLUGIN_ID = 'anidb_search'
 
 CLIENT_STR = 'fadbs'
 CLIENT_VER = 1
-
-log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 requests = Session()
 requests.headers.update({'User-Agent': 'Python-urllib/2.6'})
@@ -48,7 +46,7 @@ class AnidbSearch(object):
     cdata_regex = re.compile(r'.+CDATA\[(.+)\]\].+')
     anidb_json = BASE_PATH / 'anime-titles.yml'
     particle_words = {
-        'x-jat': {'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa',},
+        'x-jat': {'no', 'wo', 'o', 'na', 'ja', 'ni', 'to', 'ga', 'wa'},
     }
     particle_reg = r'([nwt]?o|[njgw]a|ni)'
     title_types = [
@@ -58,7 +56,6 @@ class AnidbSearch(object):
         'official',
     ]
     last_lookup: LastLookup = None
-    cached_anime = None
 
     def __init__(self):
         self.debug = False
@@ -66,12 +63,16 @@ class AnidbSearch(object):
     @with_session
     def clean_main_titles(self, session=None) -> None:
         titles = session.query(AnimeTitle).filter(AnimeTitle.ep_type == 'main').all()
-        old_mains: List[AnimeTitle] = []
-        for title in titles:
-            title_2 = titles.pop(titles.index(title))
-            if any(title_2.parent_id == elem.parent_id for elem in titles):
-                old_mains += [title_2]
-        log.info(old_mains)
+        #  for title in titles:
+            #  next_title = session.query(AnimeTitle).filter(
+                #  AnimeTitle.ep_type == 'main',  # It is the MAIN title
+                #  AnimeTitle.parent_id == title.parent_id,  # It belongs to the same parent
+                #  AnimeTitle.id_ > title.id_,  # Its id is larger than the current one
+            #  ).first()
+            #  if next_title:
+                #  logger.verbose('Purging old title: {0}'.format(title.name))
+                #  session.delete(title)
+        #  session.commit()
 
     def line_checks(self, line: str) -> Optional[Tuple[int, List[str]]]:
         """Check if the line for the title is good, if so return it parsed.
@@ -83,19 +84,19 @@ class AnidbSearch(object):
         split_line: List
         type_index: int
         if line[0] == '#':
-            log.trace('Skipping line due to comment')
+            logger.trace('Skipping line due to comment')
             return None
         split_line = line.split('|')
         type_index = int(split_line[1])
         if len(split_line) < 4 or type_index > 3:
             if len(split_line) < 4:
-                log.warning("We don't have all of the information we need, skipping")
-                log.debug('line: %s', line)
+                logger.warning("We don't have all of the information we need, skipping")
+                logger.debug('line: {}', line)
             return None
         try:
             aid = int(split_line[0])
         except ValueError:
-            log.warning("Can't turn %s into an int, no aid, skipping.", split_line[0])
+            logger.warning("Can't turn {} into an int, no aid, skipping.", split_line[0])
             return None
         return aid, [self.title_types[type_index - 1], *split_line[2:]]
 
@@ -103,23 +104,23 @@ class AnidbSearch(object):
         try:
             anime_titles = open(filename, 'r')
         except OSError:
-            log.warning('anime_titles.dat was not found, not importing titles')
+            logger.warning('anime_titles.dat was not found, not importing titles')
             return {}
         anime_dict: Dict = {}
         for line in anime_titles:
             if line[0] == '#':
-                log.trace('Skipping line due to comment')
+                logger.trace('Skipping line due to comment')
                 continue
             split_line = line.split('|')
             if len(split_line) < 4:
-                log.warning("We don't have all of the information we need, skipping")
-                log.debug('line: %s', line)
+                logger.warning("We don't have all of the information we need, skipping")
+                logger.debug('line: {}', line)
                 continue
             try:
                 aid = int(split_line[0])
             except ValueError:
-                log.warning(
-                    "Can't turn %s into an int, no aid, skipping.", split_line[0]
+                logger.warning(
+                    "Can't turn {} into an int, no aid, skipping.", split_line[0],
                 )
                 continue
             type_index = int(split_line[1])
@@ -133,7 +134,7 @@ class AnidbSearch(object):
         return anime_dict
 
     def generate_title(
-        self, anime_id: int, title: List, current_titles
+        self, anime_id: int, title: List, current_titles,
     ) -> Optional[AnimeTitle]:
         """Generate a title object for an anime if it does not exist and return it.
 
@@ -147,9 +148,9 @@ class AnidbSearch(object):
         title_itself = title[2].strip()
         new_title = AnimeTitle(title_itself, title[1], title[0], anime_id)
         if new_title not in current_titles:
-            log.debug('adding %s to the titles', title_itself)
+            logger.debug('adding {} to the titles', title_itself)
             return new_title
-        log.trace('%s exists in the database, skipping.', title_itself)
+        logger.trace('{} exists in the database, skipping.', title_itself)
         return None
 
     @with_session
@@ -161,21 +162,16 @@ class AnidbSearch(object):
         # convert to dict keys are aid, value is an AnimeTitle
         animes: Dict = self.psv_to_dict()
         if not animes:
-            log.warning('We did not get any anime, bailing')
+            logger.warning('We did not get any anime, bailing')
             return
         for anidb_id, anime in animes.items():
-            db_anime = (
-                session.query(Anime)
-                .join(AnimeTitle)
-                .filter(Anime.anidb_id == anidb_id)
-                .first()
-            )
+            db_anime = session.query(Anime).get({'anidb_id': anidb_id})
             if not db_anime:
-                db_anime = Anime(anidb_id=anidb_id)
+                db_anime = Anime(anidb_id)
                 session.add(db_anime)
             for title in anime:
                 generated_title = self.generate_title(
-                    db_anime.id_, title, db_anime.titles
+                    db_anime.id_, title, db_anime.titles,
                 )
                 if generated_title:
                     db_anime.titles += [generated_title]
@@ -186,17 +182,17 @@ class AnidbSearch(object):
             expired = (datetime.now() - self.xml_file.modified()) > timedelta(1)
         if not self.xml_file.exists() or expired:
             log_msg = (
-                'Cache is expired, %s'
+                'Cache is expired, {}'
                 if self.xml_file.exists()
-                else 'Cache does not exist, %s'
+                else 'Cache does not exist, {}'
             )
-            log.info(log_msg, 'downloading now.')
+            logger.info(log_msg, 'downloading now.')
             self.__download_anidb_titles()
             self._load_anime_to_db()
 
     def __download_anidb_titles(self) -> None:
         if self.debug:
-            log.debug('In debug mode, not downloading a new dump.')
+            logger.debug('In debug mode, not downloading a new dump.')
             return
         anidb_titles = requests.get(self.anidb_title_dump_url)
         if anidb_titles.status_code >= HTTPStatus.BAD_REQUEST:
@@ -208,14 +204,38 @@ class AnidbSearch(object):
             # todo: put some effort into it some other time.
             unzipped = gzip.decompress(anidb_titles.raw.read())
             xml_file.write(unzipped)
-        log.info('Downloaded new title dump')
+        logger.info('Downloaded new title dump')
 
     def generate_like_statement(self, name: str) -> List[str]:
+        """Generate SQL like statements with the title of the anime."""
         like_gen: List[str] = []
         for title_part in name.split(' '):
             if title_part not in self.particle_words['x-jat']:
                 like_gen += [AnimeTitle.name.like('% {0} %'.format(title_part))]
         return like_gen
+
+    @with_session
+    def get_series_by_name(self, name: str, session=None):
+        """Find an anime given the name."""
+        logger.debug('AniDB id not present, looking up by the title, {}', name)
+        series = (
+            session.query(Anime)
+            .join(AnimeTitle)
+            .filter(AnimeTitle.name == name)
+            .first()
+        )
+        if not series and name:
+            like_gen = self.generate_like_statement(name)
+            titles = session.query(AnimeTitle).filter(*like_gen).all()
+            if not titles:
+                return None
+            match = fw_process.extractOne(name, titles)
+            logger.debug('{}: {}, {}', match[0], match[1], name)
+            if match and match[1] >= 90:
+                series_id = match[0].parent_id
+                series = session.query(Anime).filter(Anime.id_ == series_id).first()
+                logger.trace(series.anidb_id)
+        return series
 
     @with_session
     def lookup_series(
@@ -226,69 +246,47 @@ class AnidbSearch(object):
         session: SQLSession = None,
     ):
         """Lookup an Anime series and return it."""
-        # self.clean_main_titles()
         if not session:
             raise plugin.PluginError("We weren't given a session!")
-        self._make_xml_junk()
-        # If we don't have an id or a name, we cannot find anything
-        if not (anidb_id or name):
+        elif not (anidb_id or name):
+            # If we don't have an id or a name, we cannot find anything
             raise plugin.PluginError(
-                'anidb_id and name are both None, cannot continue.'
+                'anidb_id and name are both None, cannot continue.',
             )
+        self._make_xml_junk()
         # Check if we previously looked up this title.
         # todo: expand this to not only store the last lookup, also possibly persist this?
         if not anidb_id and self.last_lookup and name == self.last_lookup.name:
-            log.debug(
-                'anidb_id is not set, but the series_name is a match to the previous lookup'
+            logger.debug(
+                'anidb_id is not set, but the series_name is a match to the previous lookup',
             )
-            log.debug('setting anidb_id for %s to %s', name, self.last_lookup.anidb_id)
+            logger.debug('setting anidb_id for {} to {}', name, self.last_lookup.anidb_id)
             anidb_id = self.last_lookup.anidb_id
 
         series = None
 
         if anidb_id:
-            if self.cached_anime and self.cached_anime.anidb_id == anidb_id:
-                log.debug('We have aid%s cached, using it', anidb_id)
-                series = self.cached_anime
-            else:
-                log.debug('AniDB id is present and is %s.', anidb_id)
-                query = session.query(Anime)
-                query = query.filter(Anime.anidb_id == anidb_id)
-                series = query.first()
-                log.debug(series)
+            logger.debug('AniDB id is present and is {}.', anidb_id)
+            series = session.query(Anime).get({'anidb_id': anidb_id})
         else:
-            log.debug('AniDB id not present, looking up by the title, %s', name)
-            series = (
-                session.query(Anime)
-                .join(AnimeTitle)
-                .filter(AnimeTitle.name == name)
-                .first()
-            )
-            if not series and name:
-                like_gen = self.generate_like_statement(name)
-                titles = session.query(AnimeTitle).filter(*like_gen).all()
-                if not titles:
-                    return None
-                match = fw_process.extractOne(name, titles)
-                log.debug('%s: %s, %s', match[0], match[1], name)
-                if match and match[1] >= 90:
-                    series_id = match[0].parent_id
-                    series = session.query(Anime).filter(Anime.id_ == series_id).first()
-                    self.cached_anime = series
+            series = self.get_series_by_name(name)
 
         if series:
-            log.debug('%s', series)
-            if not only_cached and (series.expired is None or series.expired):
-                log.debug('%s is expired, refreshing metadata', series.title_main)
+            logger.debug('{}', series)
+            if not only_cached:  # and (series.expired is None or series.expired):
+                logger.debug('{} is expired, refreshing metadata', series.title_main)
                 parser = AnidbParser(series.anidb_id)
                 parser.parse()
                 series = parser.series
-                log.debug(series)
+                logger.debug(series)
             if not anidb_id:
                 self.last_lookup = LastLookup(series.anidb_id, name)
-            return series
 
-        log.warning(
-            'No series found with series name: %s, when was the last time the cache was updated?',
-            name,
-        )
+        if not series:
+
+            logger.warning(
+                'No series found with series name: {}, when was the last time the cache was updated?',
+                name,
+            )
+
+        return series

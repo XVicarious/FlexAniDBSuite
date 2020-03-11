@@ -1,34 +1,31 @@
 """In charge of fetching and parsing anime from AniDB."""
 import logging
-from datetime import datetime, timedelta
 from typing import Optional
+from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
 from flexget import plugin
-from flexget.logger import FlexGetLogger
-from flexget.manager import manager
-from flexget.utils import requests
 from requests import HTTPError
 from sqlalchemy import orm as sa_orm
+from flexget.utils import requests
+from loguru import logger
 
-from .anidb_cache import cached_anidb
-from .anidb_parse_episodes import AnidbParserEpisodes
-from .anidb_parser_tags import AnidbParserTags
-from .api_anidb import Anime
 from .config import CONFIG
+from .api_anidb import Anime
+from .anidb_cache import cached_anidb
 from .fadbs_session import FadbsSession
 from .anidb_parser_new import AnidbAnime
+from .anidb_parser_tags import AnidbParserTags
+from .anidb_parse_episodes import AnidbParserEpisodes
 
 PLUGIN_ID = 'anidb_parser'
-
-LOG: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 DISABLED = False
 
 requests_ = requests.Session()
 requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 
-requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds',),)
+requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
 
 
 class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
@@ -63,7 +60,7 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         self._get_anime()
 
     def __del__(self):
-        LOG.trace('YEETING %s', self)
+        logger.trace('YEETING %s', self)
         if self.session:
             self.session.close()
 
@@ -75,41 +72,41 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
     def requests(self) -> requests.Session:
         return self.fadbs_session.requests
 
+    @pysnooper.snoop('anidb_parse-request_anime.log', depth=2)
     def request_anime(self) -> str:
         """Request an anime from AniDB."""
         banned_until = CONFIG.banned + timedelta(days=1)
         if CONFIG.is_banned():
             raise plugin.PluginError(
-                'Banned from AniDB until {0}'.format(banned_until,),
+                'Banned from AniDB until {0}'.format(banned_until),
             )
         # params = self.anidb_params.copy()
         # params.update(self.anidb_anime_params)
-        # params.update({'aid': self.anidb_iid})
+        # params.update({'aid': self.anidb_id})
         # if not self.series.is_airing and self.series.end_date and datetime.utcnow().date() - self.series.end_date > timedelta(days=14):
         #    return
+        if not self.series.should_update:
+            return None
         params = {'aid': self.anidb_id}
         try:
             page = self.requests.get('https://xvicario.us/anidb', params=params)
             CONFIG.inc_session()
             CONFIG.update_session()
         except HTTPError as http_error:
-            LOG.warning(http_error.strerror)
+            logger.warning(http_error.strerror)
             raise http_error
-        if (
-            not page
-        ):  # todo I don't know if this statement is needed. I should investigate.
-            raise plugin.PluginWarning("We didn't get a page!")
-        page = page.text
-        if page == 'banned':
-            CONFIG.set_banned()
-            raise plugin.PluginError(
-                'Banned from AniDB until {0}'.format(CONFIG.banned + timedelta(days=1)),
-            )
+        if page:
+            page = page.text
+            if page == 'banned':
+                CONFIG.set_banned()
+                raise plugin.PluginError(
+                    'Banned from AniDB until {0}'.format(CONFIG.banned + timedelta(days=1)),
+                )
         return page
 
     def _get_anime(self) -> None:
         self.series = (
-            self.session.query(Anime).filter(Anime.anidb_id == self.anidb_id).first()
+            self.session.query(Anime).get({'anidb_id': self.anidb_id})
         )
         if not self.series:
             raise plugin.PluginError(
@@ -132,41 +129,46 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
                     'No anime was found in the soup, did we get passed something bad?',
                 )
 
-            LOG.trace('Setting series_type')
+            logger.trace('Setting series_type')
             self.series.series_type = parse_anime.series_type
 
-            LOG.trace('Setting num_episodes')
+            logger.trace('Setting num_episodes')
             self.series.num_episodes = parse_anime.episode_count
 
-            LOG.trace('Setting the start and end dates')
-            self.series.start_date = parse_anime.startdate
-            self.series.end_date = parse_anime.enddate
+            logger.trace('Setting the start and end dates')
+            try:
+                start = [int(part) for part in parse_anime.startdate.split('-')]
+                self.series.start_date = datetime(*start).date()
+                end = [int(part) for part in parse_anime.enddate.split('-')]
+                self.series.end_date = datetime(*end).date()
+            except ValueError:
+                logger.warning("Series date isn't a fully qualified date.")
 
-            LOG.trace('Setting titles')
+            logger.trace('Setting titles')
             self._set_titles(root.find('titles'))
 
             # todo: similar, related
 
-            LOG.trace('Setting urls')
+            logger.trace('Setting urls')
             self.series.url = parse_anime.official_url
 
             # todo: creators
 
-            LOG.trace('Setting description')
+            logger.trace('Setting description')
             self.series.description = parse_anime.description
 
-            LOG.trace('Setting ratings')
+            logger.trace('Setting ratings')
             self.series.permanent_rating = parse_anime.permanent_rating
             self.series.mean_rating = parse_anime.mean_rating
 
-            LOG.trace('Setting tags')
+            logger.trace('Setting tags')
             tags = root.find('tags')
             if tags:
                 self._set_tags(tags('tag'))
 
             # todo: characters
 
-            LOG.trace('Setting episodes')
+            logger.trace('Setting episodes')
             self._set_episodes(root.find('episodes'))
 
             self.session.add(self.series)
