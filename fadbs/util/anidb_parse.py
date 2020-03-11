@@ -72,7 +72,6 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
     def requests(self) -> requests.Session:
         return self.fadbs_session.requests
 
-    @pysnooper.snoop('anidb_parse-request_anime.log', depth=2)
     def request_anime(self) -> str:
         """Request an anime from AniDB."""
         banned_until = CONFIG.banned + timedelta(days=1)
@@ -89,7 +88,7 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
             return None
         params = {'aid': self.anidb_id}
         try:
-            page = self.requests.get('https://xvicario.us/anidb', params=params)
+            page = requests_.get('anidb_lol', params=params)
             CONFIG.inc_session()
             CONFIG.update_session()
         except HTTPError as http_error:
