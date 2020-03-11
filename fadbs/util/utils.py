@@ -7,12 +7,12 @@ from bs4 import Tag
 
 Season = NewType('Season', str)
 
-SEASONS = [
+SEASONS = (
     Season('Winter'),
     Season('Spring'),
     Season('Summer'),
     Season('Fall'),
-]
+)
 
 
 def get_anime_season(month: int) -> Season:

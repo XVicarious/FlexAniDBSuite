@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "fadbs"
+version = "0.0.9"
+description = ""
+authors = ["Brian Maurer <bmaurer@xvicario.us>"]
+
+[tool.poetry.dependencies]
+python = ">=3.6,<4.0"
+flexget = "^3.0"
+fuzzywuzzy = "^0.17.0"
+
+[tool.poetry.extras]
+tests = ["pytest"]
+
+[tool.poetry.dev-dependencies]
+nitpick = "^0.21.2"
+wemake-python-styleguide = "^0.13.0"
+
+[tool.nitpick]
+style = "https://raw.githubusercontent.com/wemake-services/wemake-python-styleguide/master/styles/nitpick-style-wemake.toml"
+
+[build-system]
+build-backend = "poetry.masonry.api"

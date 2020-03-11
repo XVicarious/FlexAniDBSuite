@@ -1,17 +1,18 @@
 """AniDB Database Table Things."""
 import logging
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
 from flexget import db_schema
-from flexget.components.parsing.parsers.parser_common import remove_dirt
-from flexget.db_schema import Meta, UpgradeImpossible, versioned_base
-from sqlalchemy import Column, Date, DateTime, Float, Integer, String, Table, Text, Unicode
+from sqlalchemy import Date, Text, Float, Table, Column, String, Integer, Unicode, DateTime
 from sqlalchemy.orm import relation, relationship
-from sqlalchemy.schema import ForeignKey, Index
+from flexget.db_schema import VersionedBaseMeta as Meta, UpgradeImpossible, versioned_base
+from sqlalchemy.schema import Index, ForeignKey
+from flexget.components.parsing.parsers.parser_common import remove_dirt
+from flexget.utils.sqlalchemy_utils import *
 
-from .config import CONFIG
 from .utils import SEASONS, Season, get_anime_season
+from .config import CONFIG
 
 SCHEMA_VER = 1
 
@@ -19,14 +20,21 @@ Base: Meta = versioned_base('api_anidb', SCHEMA_VER)
 
 
 def _table_master(table_name, index_table_name, left_id, right_id):
-    return Table(table_name, Base.metadata,
-                 Column(left_id[0], ForeignKey(left_id[1])),
-                 Column(right_id[0], ForeignKey(right_id[1])),
-                 Index(index_table_name, left_id[0], right_id[0]))
+    return Table(
+        table_name,
+        Base.metadata,
+        Column(left_id[0], ForeignKey(left_id[1])),
+        Column(right_id[0], ForeignKey(right_id[1])),
+        Index(index_table_name, left_id[0], right_id[0]),
+    )
 
 
-episodes_table = _table_master('anidb_anime_episodes', 'ix_anidb_anime_episodes',
-                               ['anidb_series_id', 'anidb_series.id'], ['episode_id', 'anidb_episodes.id'])
+episodes_table = _table_master(
+    'anidb_anime_episodes',
+    'ix_anidb_anime_episodes',
+    ['anidb_series_id', 'anidb_series.id'],
+    ['episode_id', 'anidb_episodes.id'],
+)
 Base.register_table(episodes_table)
 
 PLUGIN_ID = 'api_anidb'
@@ -39,8 +47,8 @@ class Anime(Base):
 
     __tablename__ = 'anidb_series'
 
-    id_ = Column('id', Integer, primary_key=True)
-    anidb_id = Column(Integer, unique=True)
+    id_ = Column('id', Integer, unique=True)
+    anidb_id = Column(Integer, primary_key=True)
     series_type = Column(Unicode)
     num_episodes = Column(Integer)
     start_date = Column(Date)
@@ -55,18 +63,25 @@ class Anime(Base):
     mean_rating = Column(Float)
     genres = relationship('AnimeGenreAssociation', back_populates='anime')
     # characters = relation('AnimeCharacter', secondary=characters_table, backref='series')
-    episodes = relation('AnimeEpisode', secondary=episodes_table, backref='anidb_series')
+    episodes = relation(
+        'AnimeEpisode', secondary=episodes_table, backref='anidb_series'
+    )
     _year = Column('year', Integer)
     _season = Column('season', String)
 
     updated = Column(DateTime)
 
+    def __init__(self, anidb_id: int):
+        self.anidb_id = anidb_id
+
     @property
     def title_main(self) -> str:
         """Title Considered the "Main" Title on AniDB."""
+        maintit = None
         for title in self.titles:
             if title.ep_type == 'main':
-                return title.name
+                maintit = title.name
+        return maintit
 
     @property
     def clean_title_main(self) -> str:
@@ -95,6 +110,8 @@ class Anime(Base):
     def season(self) -> Season:
         """Return season that the anime first aired."""
         if not self.start_date:
+            if not self._season:
+                return None
             return SEASONS[SEASONS.index(self._season)]
         return get_anime_season(self.start_date.month)
 
@@ -111,6 +128,13 @@ class Anime(Base):
     def upgradability(self):
         """Check how upgradable this anime metadata is (0,1]."""
         return int(self.is_airing)
+
+    @property
+    def should_update(self):
+        if self.updated:
+            diff = datetime.utcnow().date() - self.updated
+            return diff >= timedelta(days=30)
+        return False
 
     def __repr__(self):
         return '<Anime(name={0},aid={1})>'.format(self.title_main, self.anidb_id)
@@ -140,7 +164,7 @@ class AnimeGenre(Base):
     __tablename__ = 'anidb_genres'
 
     id_ = Column('id', Integer, primary_key=True)
-    anidb_id = Column(Integer, unique=True)
+    anidb_id = Column(Integer, primary_key=True)
     name = Column(String)
     anime = relationship('AnimeGenreAssociation', back_populates='genre')
     children = relationship('AnimeGenre')
@@ -222,13 +246,17 @@ class AnimeTitle(Base):
         self.parent_id = parent
 
     def __eq__(self, other):
-        return (self.parent_id == other.parent_id and
-                self.language == other.language and
-                self.name == other.name and
-                self.ep_type == other.ep_type)
+        return (
+            self.parent_id == other.parent_id
+            and self.language == other.language
+            and self.name == other.name
+            and self.ep_type == other.ep_type
+        )
 
     def __repr__(self):
-        return '<AnimeTitle name="{0}", parent_id={1}>'.format(self.name, self.parent_id)
+        return '<AnimeTitle name="{0}", parent_id={1}>'.format(
+            self.name, self.parent_id
+        )
 
 
 class AnimeLanguage(Base):
@@ -249,8 +277,8 @@ class AnimeEpisode(Base):
 
     __tablename__ = 'anidb_episodes'
 
-    id_ = Column('id', Integer, primary_key=True)
-    anidb_id = Column(Integer, unique=True)
+    id_ = Column('id', Integer, unique=True)
+    anidb_id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey('anidb_series.id'))
     number = Column(Unicode)
     ep_type = Column(String)
@@ -260,9 +288,17 @@ class AnimeEpisode(Base):
     votes = Column(Integer)
     titles = relation('AnimeEpisodeTitle')
 
-    def __init__(self, anidb_id: int, length: int, airdate: Optional[datetime], parent: int, number: Optional[List] = None, rating: Optional[List] = None):
+    def __init__(
+        self,
+        anidb_id: int,
+        length: int,
+        airdate: Optional[datetime],
+        parent: int,
+        number: Optional[List] = None,
+        rating: Optional[List] = None,
+    ):
         """Set up an episode of an Anime."""
-        self.anidb_id = anidb_id
+        self._id = anidb_id
         if number:
             self.number = number[0]
             self.ep_type = number[1]
@@ -295,5 +331,9 @@ class AnimeEpisodeTitle(Base):
 def upgrade(ver, session):
     """Upgrade the database when something has changed."""
     if ver is None:
-        raise UpgradeImpossible('Resetting {0} caches because bad data may have been cached.'.format(PLUGIN_ID))
+        raise UpgradeImpossible(
+            'Resetting {0} caches because bad data may have been cached.'.format(
+                PLUGIN_ID
+            )
+        )
     return ver
