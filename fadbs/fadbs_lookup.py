@@ -100,7 +100,6 @@ class FadbsLookup(object):
     def movie_identifier(self):
         return self.series_identifier
 
-    @plugin.internet(log)
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""

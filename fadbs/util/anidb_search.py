@@ -283,10 +283,8 @@ class AnidbSearch(object):
                 self.last_lookup = LastLookup(series.anidb_id, name)
 
         if not series:
-
             logger.warning(
-                'No series found with series name: {}, when was the last time the cache was updated?',
-                name,
+                'No series found with series name: {}, when was the last time the cache was updated?', name,
             )
 
         return series

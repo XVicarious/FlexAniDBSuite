@@ -60,7 +60,7 @@ class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
         self._get_anime()
 
     def __del__(self):
-        logger.trace('YEETING %s', self)
+        logger.trace('YEETING {}', self)
         if self.session:
             self.session.close()
 

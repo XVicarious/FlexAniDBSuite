@@ -86,7 +86,7 @@ class FadbsSeriesNfo:
         for entry in task.entries:
             if not entry.get('location'):
                 continue
-            logger.debug('Starting nfo generation for %s', entry['title'])
+            logger.debug('Starting nfo generation for {}', entry['title'])
             # Load stuff
             if os.path.isdir(entry['location']):
                 entry['fadbs_nfo'] = {}
@@ -125,7 +125,7 @@ class FadbsSeriesNfo:
                 except ValueError:
                     entry['anidb_episode_extra']['season'] = 0
                     num = re.compile(r'\d+$')
-                    logger.info('type: %s', type(entry['anidb_episode_number']))
+                    logger.info('type: {}', type(entry['anidb_episode_number']))
                     episode_number = num.match(entry['anidb_episode_number'])
                 anime_template = template.render_from_entry(
                     template.get_template(episode_template), entry
@@ -141,17 +141,17 @@ class FadbsSeriesNfo:
         for aid, tag_info in anidb_tags:
             aid = int(aid)
             name, weight = tag_info
-            logger.trace('%s: %s, weight %s', aid, name, weight)
+            logger.trace('{}: {}, weight {}', aid, name, weight)
             if aid in self.default_genres.keys() and self.meets_genre_weight(
                 weight, genre_weight
             ):
                 g_and_t[0].append(name)
-                logger.debug('Added %s as a genre', name)
+                logger.debug('Added {} as a genre', name)
                 continue
                 # todo: remove an overridden genre
             elif aid in self.demographic:
                 g_and_t[0].append(name)
-                logger.debug('Added demographic %s as a genre', name)
+                logger.debug('Added demographic {} as a genre', name)
                 continue
             g_and_t[1].append(name)
         return g_and_t

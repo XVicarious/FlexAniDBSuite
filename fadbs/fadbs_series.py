@@ -56,7 +56,7 @@ class EveryAnime(FilterSeriesBase):
         if title in self.titles_main:
             return False
         for general_title in self.titles_all:
-            if title == general_title[1] and int(anidb_id) < general_title[0]:
+            if title == general_title[1] and general_title[0] and int(anidb_id) < general_title[0]:
                 return False
         return True
 
@@ -80,8 +80,8 @@ class EveryAnime(FilterSeriesBase):
         fixed_setting = config_fixes[anidb_id][key]
         errors = process_config(fixed_setting, schema, set_defaults=False)
         if errors:
-            logger.warning('yada yada %s for %s errors %s', key, name, errors)
-        logger.verbose('%s (%s): {%s: %s}', name, anidb_id, key, fixed_setting)
+            logger.warning('yada yada {} for {} errors {}', key, name, errors)
+        logger.verbose('{} ({}): {}: {}', name, anidb_id, key, fixed_setting)
         return fixed_setting
 
     @staticmethod
@@ -92,13 +92,13 @@ class EveryAnime(FilterSeriesBase):
         if not errors:
             return entry['anime_series_' + key]
         logger.warning(
-            'Not settings series option %s for %s. errors: %s', key, name, errors,
+            'Not settings series option {} for {}. errors: {}', key, name, errors,
         )
         return None
 
     def generate_series_entry(self, s_entry, anime: Anime, config: dict, name: str, entry: Entry):
         anidb_id = anime.anidb_id
-        logger.trace('%s: %s', anidb_id, anime.title_main)
+        logger.trace('{}: {}', anidb_id, anime.title_main)
         s_entry['set'] = {'anidb_id': anidb_id}
         s_entry['alternate_name'] = []
         series_titles: List[str] = list(
@@ -148,11 +148,11 @@ class EveryAnime(FilterSeriesBase):
             except PluginError as plugin_error:
                 error_string = str(plugin_error)
                 logger.warning(
-                    'Error during input plugin %s: %s', input_name, error_string,
+                    'Error during input plugin {}: {}', input_name, error_string,
                 )
                 continue
             if not input_results:
-                logger.warning('Input %s did not return anything', input_name)
+                logger.warning('Input {} did not return anything', input_name)
                 continue
             for entry in input_results:
                 if not entry.get('anidb_id', None):
@@ -167,7 +167,7 @@ class EveryAnime(FilterSeriesBase):
                 )
                 if not anime:
                     logger.warning(
-                        "%s (a%s) wasn't in the database", entry['title'], anidb_id,
+                        "{} (a{}) wasn't in the database", entry['title'], anidb_id,
                     )
                     continue
 
@@ -175,7 +175,7 @@ class EveryAnime(FilterSeriesBase):
                     name = clean_value(anime.title_main)
                 except Exception as e:  # FIXME: use correct exception here
                     logger.warning(e)
-                    logger.warning("%s didn't have a proper series name", entry['title'])
+                    logger.warning("{} didn't have a proper series name", entry['title'])
                     continue
 
                 s_entry = series.setdefault(name, {})
