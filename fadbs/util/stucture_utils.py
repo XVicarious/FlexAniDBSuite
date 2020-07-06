@@ -13,15 +13,17 @@ def find_in_list_of_dict(haystack, test_key, test_value, needle_key, return_firs
     :param return_first: should it only return the first result
     :return: value of needle_key, or if return_first is False, a list of needle_key values
     """
-    value_of_nkey = [item[needle_key] for item in haystack if test_value == item[test_key]]
+    value_of_nkey = [
+        item[needle_key] for item in haystack if test_value == item[test_key]
+    ]
     if return_first:
         return value_of_nkey[0]
     return value_of_nkey
 
 
 def anime_titles_diff(
-        new_cache: Dict[int, Set],
-        old_cache: Dict[int, Set]) -> Dict[int, Set]:
+    new_cache: Dict[int, Set], old_cache: Dict[int, Set]
+) -> Dict[int, Set]:
     r"""
     Find the difference between two anime-titles dictionary caches. new_cache \ old_cache.
 

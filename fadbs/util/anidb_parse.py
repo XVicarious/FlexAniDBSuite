@@ -1,28 +1,26 @@
 """In charge of fetching and parsing anime from AniDB."""
 import logging
-import os
+from typing import Optional
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
 
 from bs4 import BeautifulSoup
-from sqlalchemy import orm as sa_orm
-
 from flexget import plugin
-from flexget.logger import FlexGetLogger
-from flexget.manager import manager
+from requests import HTTPError
+from sqlalchemy import orm as sa_orm
 from flexget.utils import requests
+from loguru import logger
 
-from .anidb_cache import cached_anidb
-from .anidb_parse_episodes import AnidbParserEpisodes
-from .anidb_parser_tags import AnidbParserTags
-from .anidb_parsing_interface import AnidbParserTemplate
+from .config import CONFIG
 from .api_anidb import Anime
+from .anidb_cache import cached_anidb
+from .fadbs_session import FadbsSession
+from .anidb_parser_new import AnidbAnime
+from .anidb_parser_tags import AnidbParserTags
+from .anidb_parse_episodes import AnidbParserEpisodes
 
 PLUGIN_ID = 'anidb_parser'
 
-LOG: FlexGetLogger = logging.getLogger(PLUGIN_ID)
-
-DISABLED = True
+DISABLED = False
 
 requests_ = requests.Session()
 requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
@@ -30,7 +28,7 @@ requests_.headers.update({'User-Agent': 'Python-urllib/2.6'})
 requests_.add_domain_limiter(requests.TimedLimiter('api.anidb.net', '3 seconds'))
 
 
-class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
+class AnidbParser(AnidbParserTags, AnidbParserEpisodes):
     """Download and parse an AniDB entry into the database."""
 
     client_string = 'fadbs'
@@ -49,62 +47,70 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         'aid': 0,
     }
     anidb_cache_time = timedelta(days=1)
-    anidb_ban_file = os.path.join(manager.config_base, '.anidb_ban')
+    fadbs_session: FadbsSession
 
-    def __init__(self, anidb_id: int):
+    def __init__(self, anidb_id: int, fadbs_session: Optional[FadbsSession] = None):
         """Initialize AnidbParser."""
-        session = sa_orm.sessionmaker(class_=sa_orm.Session)
-        session.configure(bind=manager.engine, expire_on_commit=False)
-        self.session = session()
+        if fadbs_session:
+            self.fadbs_session = fadbs_session
+        else:
+            self.fadbs_session = FadbsSession()
         self.anidb_id = anidb_id
         self.anidb_anime_params.update(aid=anidb_id)
         self._get_anime()
 
     def __del__(self):
-        LOG.trace('YEETING %s', self)
-        self.session.close()
+        logger.trace('YEETING {}', self)
+        if self.session:
+            self.session.close()
 
     @property
-    def is_banned(self) -> Tuple[bool, Optional[datetime]]:
-        """Check if we are banned from AniDB."""
-        banned = False
-        banned_until = None
-        if os.path.exists(self.anidb_ban_file):
-            with open(self.anidb_ban_file, 'r') as aniban:
-                tmp_aniban = aniban.read()
-                if tmp_aniban:
-                    banned_until = datetime.fromtimestamp(float(tmp_aniban))
-                    banned = datetime.now() - banned_until < timedelta(days=1)
-                    aniban.close()
-                if not banned:
-                    os.remove(self.anidb_ban_file)
-        return banned, banned_until
+    def session(self) -> sa_orm.Session:
+        return self.fadbs_session.session
 
-    def request_anime(self):
+    @property
+    def requests(self) -> requests.Session:
+        return self.fadbs_session.requests
+
+    def request_anime(self) -> str:
         """Request an anime from AniDB."""
-        if self.is_banned[0]:
-            raise plugin.PluginError('Banned from AniDB until {0}'.format(self.is_banned[1]))
-        params = self.anidb_params.copy()
-        params.update(request='anime', aid=self.anidb_id)
-        if DISABLED:
-            LOG.error('Banned from AniDB probably. Ask DerIdiot')
-            return
-        page = requests_.get(self.anidb_endpoint, params=params)
-        page = page.text
-        if '500' in page and 'banned' in page.lower():
-            time_now = datetime.now().timestamp()
-            with open(self.anidb_ban_file, 'w') as aniban:
-                aniban.write(str(time_now))
-                aniban.close()
-            banned_until = datetime.fromtimestamp(time_now) + timedelta(1)
-            raise plugin.PluginError('Banned from AniDB until {0}'.format(banned_until))
+        banned_until = CONFIG.banned + timedelta(days=1)
+        if CONFIG.is_banned():
+            raise plugin.PluginError(
+                'Banned from AniDB until {0}'.format(banned_until),
+            )
+        # params = self.anidb_params.copy()
+        # params.update(self.anidb_anime_params)
+        # params.update({'aid': self.anidb_id})
+        # if not self.series.is_airing and self.series.end_date and datetime.utcnow().date() - self.series.end_date > timedelta(days=14):
+        #    return
+        if not self.series.should_update:
+            return None
+        params = {'aid': self.anidb_id}
+        try:
+            page = requests_.get('anidb_lol', params=params)
+            CONFIG.inc_session()
+            CONFIG.update_session()
+        except HTTPError as http_error:
+            logger.warning(http_error.strerror)
+            raise http_error
+        if page:
+            page = page.text
+            if page == 'banned':
+                CONFIG.set_banned()
+                raise plugin.PluginError(
+                    'Banned from AniDB until {0}'.format(CONFIG.banned + timedelta(days=1)),
+                )
         return page
 
     def _get_anime(self) -> None:
-        self.series = self.session.query(Anime).filter(
-                Anime.anidb_id == self.anidb_id).first()
+        self.series = (
+            self.session.query(Anime).get({'anidb_id': self.anidb_id})
+        )
         if not self.series:
-            raise plugin.PluginError('Anime not found? When is the last time the cache was updated?')
+            raise plugin.PluginError(
+                'Anime not found? When is the last time the cache was updated?',
+            )
 
     @cached_anidb
     def parse(self, soup: BeautifulSoup = None) -> None:
@@ -112,47 +118,60 @@ class AnidbParser(AnidbParserTemplate, AnidbParserTags, AnidbParserEpisodes):
         if not soup:
             raise plugin.PluginError('The soup did not arrive.')
 
+        parse_anime = AnidbAnime(self.anidb_id, soup)
+
         with self.session.no_autoflush:
             root = soup.find('anime')
 
             if not root:
-                raise plugin.PluginError('No anime was found in the soup, did we get passed somethign bad?')
+                raise plugin.PluginError(
+                    'No anime was found in the soup, did we get passed something bad?',
+                )
 
-            series_type = root.find('type')
-            if series_type:
-                self.series.series_type = series_type.string
+            logger.trace('Setting series_type')
+            self.series.series_type = parse_anime.series_type
 
-            num_episodes = root.find('episodecount')
-            if not num_episodes:
-                self.series.num_episodes = 0
-            self.series.num_episodes = int(num_episodes.string)
+            logger.trace('Setting num_episodes')
+            self.series.num_episodes = parse_anime.episode_count
 
-            self._set_dates(root.find('startdate'), root.find('enddate'))
+            logger.trace('Setting the start and end dates')
+            try:
+                start = [int(part) for part in parse_anime.startdate.split('-')]
+                self.series.start_date = datetime(*start).date()
+                end = [int(part) for part in parse_anime.enddate.split('-')]
+                self.series.end_date = datetime(*end).date()
+            except ValueError:
+                logger.warning("Series date isn't a fully qualified date.")
 
+            logger.trace('Setting titles')
             self._set_titles(root.find('titles'))
 
             # todo: similar, related
 
-            official_url = root.find('url')
-            if official_url:
-                self.series.url = official_url.string
+            logger.trace('Setting urls')
+            self.series.url = parse_anime.official_url
 
             # todo: creators
 
-            description = root.find('description')
-            if description:
-                self.series.description = description.string
+            logger.trace('Setting description')
+            self.series.description = parse_anime.description
 
-            self._get_ratings(root.find('ratings'))
+            logger.trace('Setting ratings')
+            self.series.permanent_rating = parse_anime.permanent_rating
+            self.series.mean_rating = parse_anime.mean_rating
 
+            logger.trace('Setting tags')
             tags = root.find('tags')
             if tags:
                 self._set_tags(tags('tag'))
 
             # todo: characters
 
+            logger.trace('Setting episodes')
             self._set_episodes(root.find('episodes'))
 
             self.session.add(self.series)
 
-        self.session.commit()
+            self.series.updated = datetime.now()
+
+            self.session.commit()

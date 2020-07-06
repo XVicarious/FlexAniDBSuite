@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<episodedetails>
+	<title>{{ anidb_episode_titles[0] }}</title>
+	<season>{{ anidb_episode_extra.season }}</season>
+	<episode>{{ anidb_episode_number }}</episode>
+	<aired>{{ anidb_episode_airdate }}</aired>
+</episodedetails>

@@ -4,7 +4,7 @@ from typing import Dict
 
 from flexget import plugin
 from flexget.event import event
-from flexget.logger import FlexGetLogger
+from loguru import logger
 from flexget.utils.database import with_session
 from flexget.utils.log import log_once
 
@@ -12,7 +12,6 @@ from .util import ANIDB_SEARCH
 
 PLUGIN_ID: str = 'fadbs_lookup'
 
-log: FlexGetLogger = logging.getLogger(PLUGIN_ID)
 
 
 class FadbsLookup(object):
@@ -24,10 +23,9 @@ class FadbsLookup(object):
         for title in series.titles:
             if title.ep_type not in titles:
                 titles.update({title.ep_type: []})
-            titles[title.ep_type].append({
-                'lang': title.language,
-                'name': title.name,
-            })
+            titles[title.ep_type].append(
+                {'lang': title.language, 'name': title.name},
+            )
         return titles
 
     field_map = {
@@ -46,39 +44,46 @@ class FadbsLookup(object):
         'anidb_rating': 'permanent_rating',
         'anidb_mean_rating': 'mean_rating',
         'anidb_tags': lambda series: {
-            genre.genre.anidb_id: [genre.genre.name, genre.weight] for genre in series.genres
+            genre.genre.anidb_id: [genre.genre.name, genre.weight]
+            for genre in series.genres
         },
         'anidb_episodes': lambda series: [
             (episode.anidb_id, episode.number) for episode in series.episodes
         ],
         'anidb_year': 'year',
-        'anidb_season': 'season'}
+        'anidb_season': 'season',
+    }
 
     # todo: implement UDP api to get more info
     # UDP gives us more episode information, I think
     # who knows. They've had 15 years to develop this api
     # and it still doesn't include a ton of things
     episode_field_map = {
-            'anidb_episode_id': 'anidb_id',
-            'anidb_episode_number': 'number',
-            'anidb_episode_type': 'ep_type',
-            'anidb_episode_airdate': 'airdate',
-            'anidb_episode_rating': 'rating',
-            'anidb_episode_titles': 'titles',
-            'anidb_episode_votes': 'votes'}
+        'anidb_episode_id': 'anidb_id',
+        'anidb_episode_number': 'number',
+        'anidb_episode_type': 'ep_type',
+        'anidb_episode_airdate': 'airdate',
+        'anidb_episode_rating': 'rating',
+        'anidb_episode_titles': lambda episode: [
+            title.title for title in episode.titles if title.language == 'en'
+        ],
+        'anidb_episode_votes': 'votes',
+    }
 
     schema = {'type': 'boolean'}
 
     @plugin.priority(130)
     def on_task_metainfo(self, task, config):
+        """Flexget Metainfo Method."""
         if not config:
             return
         for entry in task.entries:
-            log.debug('Looking up: %s', entry.get('title'))
+            logger.debug('Looking up: {}', entry.get('title'))
             self.register_lazy_fields(entry)
 
     def register_lazy_fields(self, entry):
-        entry.register_lazy_func(self.lazy_loader, self.field_map)
+        dict_keys = {**self.field_map, **self.episode_field_map}
+        entry.register_lazy_func(self.lazy_loader, dict_keys)
 
     def lazy_loader(self, entry):
         try:
@@ -91,15 +96,19 @@ class FadbsLookup(object):
         """Return what field is used to identify the series."""
         return 'anidb_id'
 
-    @plugin.internet(log)
+    @property
+    def movie_identifier(self):
+        return self.series_identifier
+
     @with_session
     def lookup(self, entry, session=None):
         """Lookup series, and update the entry."""
-        series = None
-
-        anidb_id = entry.get('anidb_id', eval_lazy=False)
+        anidb_id = entry.get('anidb_id')
         series_name = entry.get('series_name')
-        log.verbose('%s: %s', anidb_id, series_name)
+        location = entry.get('location')
+        logger.verbose(
+            '{}: {} ({}) at {}', entry['title'], series_name, anidb_id, location,
+        )
         series = ANIDB_SEARCH.lookup_series(anidb_id=anidb_id, name=series_name)
 
         # There is a whole part about expired entries here.
@@ -109,17 +118,23 @@ class FadbsLookup(object):
 
         # todo: trace log attributes?
         if series:
-            session.add(series)
+            if not session.object_session(series):
+                session.add(series)
             entry.update_using_map(self.field_map, series)
             if 'series_id' in entry:
-                entry_id = entry['series_id']
-                episode = [episode_entry for episode_entry in series.episodes if episode_entry.number == entry_id]
-                if len(episode):
-                    episode = episode[0]
-                    entry.update_using_map(self.episode_field_map, episode)
+                entry_id = str(entry['series_id'])
+                for episode_entry in series.episodes:
+                    if episode_entry.number == entry_id:
+                        entry.update_using_map(self.episode_field_map, episode_entry)
+                        break
 
 
 @event('plugin.register')
 def register_plugin():
     """Register the plugin with Flexget."""
-    plugin.register(FadbsLookup, PLUGIN_ID, api_ver=2, interfaces=['task', 'series_metainfo', 'movie_metainfo'])
+    plugin.register(
+        FadbsLookup,
+        PLUGIN_ID,
+        api_ver=2,
+        interfaces=['task', 'series_metainfo', 'movie_metainfo'],
+    )
